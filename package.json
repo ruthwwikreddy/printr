@@ -1,0 +1,25 @@
+{
+  "name": "print",
+  "version": "1.0.0",
+  "description": "Automated Xerox / Document Printing Platform",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "agent": "node print-agent/agent.js"
+  },
+  "dependencies": {
+    "firebase": "^12.18.0",
+    "lucide-react": "^0.378.0",
+    "next": "^14.2.3",
+    "pdf-lib": "^1.17.1",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.12.12",
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
+    "typescript": "^5.4.5"
+  }
+}
