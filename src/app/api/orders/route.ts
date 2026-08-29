@@ -1,55 +1,62 @@
 import { NextResponse } from 'next/server';
 import db from '@/lib/db';
-
-function calculatePrice(
-  pageCount: number,
-  copies: number,
-  paperSize: string,
-  colourMode: string
-): number {
-  const rates: Record<string, number> = {
-    A4_MONOCHROME: 2,
-    A4_COLOUR: 10,
-    A3_MONOCHROME: 5,
-    A3_COLOUR: 20,
-  };
-  const rate = rates[`${paperSize}_${colourMode}`] ?? 2;
-  return rate * pageCount * copies;
-}
-
-let orderCounter = 1000;
+import { getTenantBySlug } from '@/lib/tenantService';
 
 export async function POST(request: Request) {
   try {
     const body = await request.json();
     const {
-      filename, filePath, mimeType, fileSize, pageCount,
-      copies, colourMode, paperSize, duplexMode, pageRange, customerPhone,
+      tenantId,
+      filename,
+      filePath,
+      mimeType,
+      fileSize,
+      pageCount,
+      copies,
+      colourMode,
+      paperSize,
+      duplexMode,
+      pageRange,
+      customerPhone,
     } = body;
 
     if (!filePath || !pageCount) {
       return NextResponse.json({ error: 'Missing file details' }, { status: 400 });
     }
 
-    // Server-side price calculation — never trust the client
-    const totalAmount = calculatePrice(
-      Number(pageCount),
-      Number(copies) || 1,
-      paperSize || 'A4',
-      colourMode || 'MONOCHROME'
-    );
+    const cleanTenantId = (tenantId || 'demo-prints').toLowerCase().trim();
+    const tenant = await getTenantBySlug(cleanTenantId);
 
-    orderCounter++;
-    const orderNumber = `RX-${orderCounter}`;
+    // Dynamic Shop-Specific Rates calculation
+    const rates = tenant?.pricing || {
+      A4_MONOCHROME: 2,
+      A4_COLOUR: 10,
+      A3_MONOCHROME: 5,
+      A3_COLOUR: 20,
+    };
+
+    const rateKey = `${paperSize || 'A4'}_${colourMode || 'MONOCHROME'}` as keyof typeof rates;
+    const unitPrice = rates[rateKey] ?? 2;
+    const totalAmount = unitPrice * Number(pageCount) * (Number(copies) || 1);
+
+    const prefix = cleanTenantId.slice(0, 3).toUpperCase();
+    const orderNumber = `${prefix}-${Math.floor(1000 + Math.random() * 9000)}`;
 
     const order = await db.order.create({
       data: {
         orderNumber,
+        tenantId: cleanTenantId,
         customerPhone: customerPhone || null,
         totalAmount,
         status: 'AWAITING_PAYMENT',
         files: {
-          create: { filename, filePath, mimeType, fileSize: Number(fileSize), pageCount: Number(pageCount) },
+          create: {
+            filename,
+            filePath,
+            mimeType,
+            fileSize: Number(fileSize),
+            pageCount: Number(pageCount),
+          },
         },
         printJobs: {
           create: {
@@ -67,22 +74,24 @@ export async function POST(request: Request) {
     const payment = await db.payment.create({
       data: {
         orderId: order.id,
-        gatewayOrderId: `rzp_order_${order.id}`,
+        gatewayOrderId: `upi_order_${order.id}`,
         amount: totalAmount,
         status: 'created',
       },
     });
 
-    // Cloud Firestore Sync (async non-blocking)
+    // Sync to Cloud Firestore with strict tenantId scoping
     try {
       const { syncOrderToFirestore } = await import('@/lib/firestoreService');
       await syncOrderToFirestore({
         id: order.id,
         orderNumber: order.orderNumber,
+        tenantId: cleanTenantId,
         customerPhone: customerPhone || null,
         totalAmount,
         status: 'AWAITING_PAYMENT',
         filename,
+        filePath,
         pageCount: Number(pageCount),
         copies: Number(copies) || 1,
         colourMode: colourMode || 'MONOCHROME',
@@ -96,13 +105,14 @@ export async function POST(request: Request) {
         updatedAt: order.updatedAt || new Date().toISOString(),
       });
     } catch (fsErr) {
-      console.warn('Firestore sync optional warning:', fsErr);
+      console.warn('Firestore sync warning:', fsErr);
     }
 
     return NextResponse.json({
       success: true,
       orderId: order.id,
       orderNumber: order.orderNumber,
+      tenantId: cleanTenantId,
       amount: totalAmount,
       gatewayOrderId: payment.gatewayOrderId,
     });

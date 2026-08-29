@@ -7,6 +7,7 @@ import {
   getDoc,
   onSnapshot,
   query,
+  where,
   orderBy,
   limit,
 } from 'firebase/firestore';
@@ -14,10 +15,12 @@ import {
 export interface FirestoreOrder {
   id: string;
   orderNumber: string;
+  tenantId: string; // Tenant Isolation
   customerPhone?: string | null;
   totalAmount: number;
   status: string;
   filename: string;
+  filePath?: string;
   pageCount: number;
   copies: number;
   colourMode: string;
@@ -34,12 +37,13 @@ export interface FirestoreOrder {
 const ORDERS_COLLECTION = 'orders';
 
 /**
- * Save / sync an order to Cloud Firestore
+ * Save / sync an order to Cloud Firestore scoped by tenantId
  */
 export async function syncOrderToFirestore(orderData: FirestoreOrder) {
   try {
+    const cleanTenantId = (orderData.tenantId || 'demo-prints').toLowerCase().trim();
     const orderRef = doc(db, ORDERS_COLLECTION, orderData.id);
-    await setDoc(orderRef, orderData, { merge: true });
+    await setDoc(orderRef, { ...orderData, tenantId: cleanTenantId }, { merge: true });
     return true;
   } catch (err) {
     console.error('Firestore syncOrder error:', err);
@@ -91,15 +95,18 @@ export function subscribeToFirestoreOrder(
 }
 
 /**
- * Real-time listener for Admin Dashboard orders
+ * Real-time listener for Shop Owner Dashboard orders (Strictly filtered by tenantId)
  */
-export function subscribeToAllFirestoreOrders(
+export function subscribeToTenantOrders(
+  tenantId: string,
   callback: (orders: FirestoreOrder[]) => void
 ) {
+  const cleanTenantId = (tenantId || 'demo-prints').toLowerCase().trim();
   const ordersQuery = query(
     collection(db, ORDERS_COLLECTION),
+    where('tenantId', '==', cleanTenantId),
     orderBy('createdAt', 'desc'),
-    limit(50)
+    limit(100)
   );
 
   return onSnapshot(
@@ -112,7 +119,45 @@ export function subscribeToAllFirestoreOrders(
       callback(orders);
     },
     (err) => {
-      console.error('Firestore admin subscription error:', err);
+      // Fallback query without orderBy if composite index is being generated
+      const fallbackQuery = query(
+        collection(db, ORDERS_COLLECTION),
+        where('tenantId', '==', cleanTenantId),
+        limit(100)
+      );
+      return onSnapshot(fallbackQuery, (snap) => {
+        const orders: FirestoreOrder[] = [];
+        snap.forEach((doc) => orders.push(doc.data() as FirestoreOrder));
+        orders.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+        callback(orders);
+      });
+    }
+  );
+}
+
+/**
+ * Real-time listener for Platform Super Admin (Global orders view)
+ */
+export function subscribeToAllFirestoreOrders(
+  callback: (orders: FirestoreOrder[]) => void
+) {
+  const ordersQuery = query(
+    collection(db, ORDERS_COLLECTION),
+    orderBy('createdAt', 'desc'),
+    limit(150)
+  );
+
+  return onSnapshot(
+    ordersQuery,
+    (snapshot) => {
+      const orders: FirestoreOrder[] = [];
+      snapshot.forEach((doc) => {
+        orders.push(doc.data() as FirestoreOrder);
+      });
+      callback(orders);
+    },
+    (err) => {
+      console.error('Firestore super-admin subscription error:', err);
     }
   );
 }

@@ -1,15 +1,13 @@
 #!/usr/bin/env node
 /**
- * Shop Print Agent — macOS / CUPS
- * Runs on your MacBook, polls the backend, and sends jobs to CUPS automatically.
+ * Printr Universal Cross-Platform Print Agent Daemon
+ * Supports macOS (CUPS/lp), Linux (CUPS), and Windows (PowerShell / Out-Printer / SumatraPDF)
  *
- * Usage:
- *   node print-agent/agent.js
- *
- * Environment variables:
- *   BACKEND_URL              — defaults to http://localhost:3000
- *   PRINT_AGENT_AUTH_SECRET  — must match the server .env value
- *   PRINTER_NAME             — override the CUPS printer queue name
+ * Multi-Tenant Scoped:
+ *   TENANT_ID                — shop unique slug (e.g. "city-xerox", "demo-prints")
+ *   BACKEND_URL              — defaults to https://printr.ruthwikreddy.live
+ *   PRINT_AGENT_AUTH_SECRET  — shop secret auth token from the dashboard
+ *   PRINTER_NAME             — optional printer queue override
  */
 
 const http = require('http');
@@ -17,26 +15,31 @@ const https = require('https');
 const { exec } = require('child_process');
 const fs = require('fs');
 const path = require('path');
+const os = require('os');
 
-// ── Configuration ─────────────────────────────────────────────
-const BACKEND_URL = (process.env.BACKEND_URL || 'http://localhost:3000').replace(/\/$/, '');
-const TOKEN = process.env.PRINT_AGENT_AUTH_SECRET || '99022997a3d1dd327bd67ed57eb370f25095edaccb2bd09db7678d8ea3f5ce63';
-const HEARTBEAT_MS = 8000;   // send heartbeat every 8 seconds
-const POLL_MS = 4000;        // poll for new jobs every 4 seconds
-const AGENT_NAME = 'Shop MacBook Agent';
+// ── Multi-Tenant Configuration ────────────────────────────────
+const TENANT_ID = (process.env.TENANT_ID || 'demo-prints').toLowerCase().trim();
+const BACKEND_URL = (process.env.BACKEND_URL || 'https://printr.ruthwikreddy.live').replace(/\/$/, '');
+const TOKEN =
+  process.env.PRINT_AGENT_AUTH_SECRET ||
+  '99022997a3d1dd327bd67ed57eb370f25095edaccb2bd09db7678d8ea3f5ce63';
+const HEARTBEAT_MS = 8000;
+const POLL_MS = 3500;
+const IS_WINDOWS = os.platform() === 'win32';
+const AGENT_NAME = `${TENANT_ID}-${IS_WINDOWS ? 'WIN' : 'MAC'}-${os.hostname()}`;
 
 let selectedPrinter = process.env.PRINTER_NAME || '';
-let isProcessingJob = false;  // prevent duplicate processing
+let isProcessingJob = false;
 
-// ── Helpers ───────────────────────────────────────────────────
+// ── Logging & Exec Helper ────────────────────────────────────
 function log(msg, ...args) {
   const ts = new Date().toLocaleTimeString('en-IN');
-  console.log(`[${ts}] ${msg}`, ...args);
+  console.log(`[${ts}] [${TENANT_ID}] ${msg}`, ...args);
 }
 
 function run(cmd) {
   return new Promise((resolve, reject) => {
-    exec(cmd, { timeout: 30000 }, (err, stdout, stderr) => {
+    exec(cmd, { timeout: 45000 }, (err, stdout, stderr) => {
       if (err) reject(new Error(stderr || stdout || err.message));
       else resolve(stdout.trim());
     });
@@ -56,7 +59,7 @@ function request(method, path, body) {
       path: url.pathname + url.search,
       method,
       headers: {
-        'Authorization': `Bearer ${TOKEN}`,
+        Authorization: `Bearer ${TOKEN}`,
         'Content-Type': 'application/json',
         ...(payload ? { 'Content-Length': Buffer.byteLength(payload) } : {}),
       },
@@ -64,29 +67,43 @@ function request(method, path, body) {
 
     const req = lib.request(options, (res) => {
       let data = '';
-      res.on('data', (c) => data += c);
+      res.on('data', (c) => (data += c));
       res.on('end', () => {
-        try { resolve({ status: res.statusCode, body: JSON.parse(data) }); }
-        catch { resolve({ status: res.statusCode, body: data }); }
+        try {
+          resolve({ status: res.statusCode, body: JSON.parse(data) });
+        } catch {
+          resolve({ status: res.statusCode, body: data });
+        }
       });
     });
     req.on('error', reject);
-    req.setTimeout(15000, () => { req.destroy(); reject(new Error('Request timeout')); });
+    req.setTimeout(15000, () => {
+      req.destroy();
+      reject(new Error('Request timeout'));
+    });
     if (payload) req.write(payload);
     req.end();
   });
 }
 
-// ── Printer Discovery ─────────────────────────────────────────
+// ── OS-Aware Printer Discovery ────────────────────────────────
 async function discoverPrinters() {
   try {
-    const out = await run('lpstat -p');
-    const printers = [];
-    for (const line of out.split('\n')) {
-      const m = line.match(/^printer\s+(\S+)/);
-      if (m) printers.push(m[1]);
+    if (IS_WINDOWS) {
+      // Windows PowerShell printer discovery
+      const psCmd = `powershell -Command "Get-Printer | Select-Object -ExpandProperty Name"`;
+      const out = await run(psCmd);
+      return out.split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
+    } else {
+      // macOS / Linux CUPS
+      const out = await run('lpstat -p');
+      const printers = [];
+      for (const line of out.split('\n')) {
+        const m = line.match(/^printer\s+(\S+)/);
+        if (m) printers.push(m[1]);
+      }
+      return printers;
     }
-    return printers;
   } catch {
     return [];
   }
@@ -94,9 +111,15 @@ async function discoverPrinters() {
 
 async function getDefaultPrinter() {
   try {
-    const out = await run('lpstat -d');
-    const m = out.match(/system default destination:\s+(\S+)/);
-    return m ? m[1] : '';
+    if (IS_WINDOWS) {
+      const psCmd = `powershell -Command "Get-CimInstance -ClassName Win32_Printer | Where-Object {$_.Default -eq $true} | Select-Object -ExpandProperty Name"`;
+      const out = await run(psCmd);
+      return out.split(/\r?\n/)[0]?.trim() || '';
+    } else {
+      const out = await run('lpstat -d');
+      const m = out.match(/system default destination:\s+(\S+)/);
+      return m ? m[1] : '';
+    }
   } catch {
     return '';
   }
@@ -105,23 +128,33 @@ async function getDefaultPrinter() {
 async function ensurePrinter() {
   if (selectedPrinter) return selectedPrinter;
   const def = await getDefaultPrinter();
-  if (def) { selectedPrinter = def; return def; }
+  if (def) {
+    selectedPrinter = def;
+    return def;
+  }
   const list = await discoverPrinters();
-  if (list.length) { selectedPrinter = list[0]; return list[0]; }
+  if (list.length) {
+    selectedPrinter = list[0];
+    return list[0];
+  }
   return '';
 }
 
-// ── Heartbeat ─────────────────────────────────────────────────
+// ── Heartbeat & Status ────────────────────────────────────────
 async function heartbeat() {
   try {
     const printer = await ensurePrinter();
-    await request('POST', '/api/agent', { name: AGENT_NAME, printer });
+    await request('POST', '/api/agent', {
+      tenantId: TENANT_ID,
+      name: AGENT_NAME,
+      os: IS_WINDOWS ? 'Windows' : 'macOS',
+      defaultPrinter: printer,
+    });
   } catch (e) {
-    log('⚠️  Heartbeat failed:', e.message);
+    log('⚠️  Heartbeat warning:', e.message);
   }
 }
 
-// ── Update Job Status ─────────────────────────────────────────
 async function updateJob(jobId, status, extra = {}) {
   try {
     await request('POST', `/api/agent/jobs/${jobId}/status`, { status, ...extra });
@@ -143,7 +176,7 @@ function downloadFile(urlPath, targetPath) {
       path: url.pathname + url.search,
       method: 'GET',
       headers: {
-        'Authorization': `Bearer ${TOKEN}`,
+        Authorization: `Bearer ${TOKEN}`,
       },
     };
 
@@ -174,109 +207,96 @@ function downloadFile(urlPath, targetPath) {
   });
 }
 
-// ── Print a Job ───────────────────────────────────────────────
+// ── Cross-Platform Printing Dispatch ─────────────────────────
 async function printJob(job) {
   const printer = await ensurePrinter();
   if (!printer) {
-    await updateJob(job.id, 'FAILED', { errorLog: 'No printer found in macOS. Please add a printer in System Settings → Printers & Scanners.' });
+    await updateJob(job.id, 'FAILED', {
+      errorLog: `No active printer found on ${IS_WINDOWS ? 'Windows' : 'macOS'}. Please add a default printer.`,
+    });
     return;
   }
 
   let finalFilePath = job.file?.filePath;
 
-  // If local file does not exist (e.g. backend is hosted on Cloud / Vercel), download it securely
+  // Cloud file fetch if not on local machine
   if (!finalFilePath || !fs.existsSync(finalFilePath)) {
     if (job.downloadUrl) {
       try {
-        log(`⬇️  Downloading file from cloud: ${job.downloadUrl}`);
+        log(`⬇️  Downloading file: ${job.file?.filename || job.orderNumber}`);
         const tempDir = path.join(__dirname, 'temp_prints');
         if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true });
         const ext = path.extname(job.file?.filename || '') || '.pdf';
         const tempFile = path.join(tempDir, `print_${job.id}_${Date.now()}${ext}`);
         finalFilePath = await downloadFile(job.downloadUrl, tempFile);
       } catch (dlErr) {
-        await updateJob(job.id, 'FAILED', { errorLog: `Cloud download error: ${dlErr.message}` });
+        await updateJob(job.id, 'FAILED', { errorLog: `Download failed: ${dlErr.message}` });
         return;
       }
     } else {
-      await updateJob(job.id, 'FAILED', { errorLog: `Print file not found at path: ${finalFilePath}` });
+      await updateJob(job.id, 'FAILED', { errorLog: `File not found: ${finalFilePath}` });
       return;
     }
   }
 
-  // Mark as processing immediately
   await updateJob(job.id, 'PROCESSING', { printerName: printer });
 
-  // Build CUPS lp command
-  const args = [
-    `-d "${printer}"`,
-    `-n ${job.copies || 1}`,
-    job.colourMode === 'COLOUR' ? '-o ColorModel=Color' : '-o ColorModel=Gray',
-    job.paperSize === 'A3' ? '-o media=A3' : '-o media=A4',
-    job.duplexMode === 'DUPLEX' ? '-o sides=two-sided-long-edge' : '-o sides=one-sided',
-    job.pageRange ? `-P "${job.pageRange}"` : '',
-    `"${filePath}"`,
-  ].filter(Boolean).join(' ');
+  if (IS_WINDOWS) {
+    // Windows Physical Print Execution via PowerShell Start-Process
+    const escapedFile = finalFilePath.replace(/'/g, "''");
+    const escapedPrinter = printer.replace(/'/g, "''");
+    const psPrintCmd = `powershell -Command "Start-Process -FilePath '${escapedFile}' -Verb PrintTo -ArgumentList '${escapedPrinter}' -PassThru | Wait-Process -Timeout 20"`;
+    log(`🖨️  [Windows] Submitting job to '${printer}'`);
 
-  const cmd = `lp ${args}`;
-  log(`🖨️  Submitting: ${cmd}`);
-
-  try {
-    const result = await run(cmd);
-    log(`✅ CUPS accepted: ${result}`);
-
-    // Extract CUPS job ID from output like "request id is Canon_Printer-42 (1 file(s))"
-    const m = result.match(/request id is\s+(\S+)/i);
-    const cupsJobId = m ? m[1] : 'submitted';
-
-    // Wait briefly then poll CUPS to confirm completion
-    await new Promise((r) => setTimeout(r, 3000));
-    await monitorCupsJob(job.id, printer, cupsJobId);
-  } catch (err) {
-    log(`❌ CUPS error: ${err.message}`);
-    await updateJob(job.id, 'FAILED', { errorLog: err.message, printerName: printer });
-  }
-}
-
-// ── Monitor CUPS Job Until Done ───────────────────────────────
-async function monitorCupsJob(jobId, printer, cupsJobId) {
-  const maxWait = 120000; // 2 minutes max
-  const start = Date.now();
-
-  while (Date.now() - start < maxWait) {
     try {
-      const out = await run(`lpstat -o "${printer}"`);
-      if (!out.includes(cupsJobId)) {
-        // Job no longer in queue = completed successfully
-        await updateJob(jobId, 'COMPLETED', { printerName: printer, cupsJobId });
-        return;
-      }
-    } catch {
-      // lpstat might throw if printer queue is empty = job done
-      await updateJob(jobId, 'COMPLETED', { printerName: printer, cupsJobId });
-      return;
+      await run(psPrintCmd);
+      log(`✅ [Windows] Print dispatched to ${printer}`);
+      await updateJob(job.id, 'COMPLETED', { printerName: printer });
+    } catch (winErr) {
+      log(`❌ [Windows] Print error: ${winErr.message}`);
+      await updateJob(job.id, 'FAILED', { errorLog: winErr.message, printerName: printer });
     }
-    await new Promise((r) => setTimeout(r, 2000));
-  }
+  } else {
+    // macOS / Linux CUPS lp command
+    const args = [
+      `-d "${printer}"`,
+      `-n ${job.copies || 1}`,
+      job.colourMode === 'COLOUR' ? '-o ColorModel=Color' : '-o ColorModel=Gray',
+      job.paperSize === 'A3' ? '-o media=A3' : '-o media=A4',
+      job.duplexMode === 'DUPLEX' ? '-o sides=two-sided-long-edge' : '-o sides=one-sided',
+      job.pageRange ? `-P "${job.pageRange}"` : '',
+      `"${finalFilePath}"`,
+    ]
+      .filter(Boolean)
+      .join(' ');
 
-  // If still in queue after 2 minutes, mark as failed
-  await updateJob(jobId, 'FAILED', { errorLog: 'Print job timed out in CUPS queue.', printerName: printer });
+    const cmd = `lp ${args}`;
+    log(`🖨️  [macOS] Submitting: ${cmd}`);
+
+    try {
+      const result = await run(cmd);
+      log(`✅ CUPS output: ${result}`);
+      await updateJob(job.id, 'COMPLETED', { printerName: printer });
+    } catch (err) {
+      log(`❌ CUPS error: ${err.message}`);
+      await updateJob(job.id, 'FAILED', { errorLog: err.message, printerName: printer });
+    }
+  }
 }
 
-// ── Poll for Jobs ─────────────────────────────────────────────
+// ── Multi-Tenant Job Polling ──────────────────────────────────
 async function pollJobs() {
-  if (isProcessingJob) return; // don't stack jobs
+  if (isProcessingJob) return;
 
   try {
-    const res = await request('GET', '/api/agent');
+    const res = await request('GET', `/api/agent?tenantId=${encodeURIComponent(TENANT_ID)}`);
     if (res.status !== 200) return;
 
     const { jobs } = res.body;
     if (!jobs || jobs.length === 0) return;
 
-    // Process one job at a time to avoid printer conflicts
     const job = jobs[0];
-    log(`📋 New job received: ${job.orderNumber} (${job.copies}x ${job.colourMode} ${job.paperSize})`);
+    log(`📋 Discovered Paid Job: ${job.orderNumber} (${job.copies}x ${job.colourMode} ${job.paperSize})`);
 
     isProcessingJob = true;
     try {
@@ -286,35 +306,36 @@ async function pollJobs() {
     }
   } catch (e) {
     if (e.message !== 'Request timeout') {
-      log('⚠️  Poll error:', e.message);
+      log('⚠️  Poll warning:', e.message);
     }
   }
 }
 
-// ── Startup ───────────────────────────────────────────────────
+// ── Universal Startup ─────────────────────────────────────────
 async function start() {
   console.log('');
-  console.log('╔══════════════════════════════════════╗');
-  console.log('║      SHOP PRINT AGENT  (macOS)       ║');
-  console.log('╚══════════════════════════════════════╝');
-  console.log(`Backend : ${BACKEND_URL}`);
+  console.log('╔══════════════════════════════════════════════════════╗');
+  console.log('║       PRINTR UNIVERSAL HARDWARE PRINT DAEMON         ║');
+  console.log('╚══════════════════════════════════════════════════════╝');
+  console.log(`OS Detected : ${IS_WINDOWS ? 'Windows' : 'macOS / Linux'}`);
+  console.log(`Tenant/Shop : ${TENANT_ID}`);
+  console.log(`Backend Hub : ${BACKEND_URL}`);
 
   const printers = await discoverPrinters();
   const def = await getDefaultPrinter();
 
   if (printers.length === 0) {
-    console.log('⚠️  No printers detected. Add a printer in System Settings → Printers & Scanners.');
+    console.log('⚠️  No active printers found. Please attach USB/Network printer.');
   } else {
-    console.log(`Printers: ${printers.join(', ')}`);
-    console.log(`Default : ${def || printers[0]}`);
+    console.log(`Printers    : ${printers.join(', ')}`);
+    console.log(`Default     : ${def || printers[0]}`);
     selectedPrinter = process.env.PRINTER_NAME || def || printers[0];
-    console.log(`Selected: ${selectedPrinter}`);
+    console.log(`Active Target: ${selectedPrinter}`);
   }
 
   console.log('');
-  log('Agent started. Connecting to backend…');
+  log(`Printr Agent daemon active. Connected to shop queue.`);
 
-  // Run immediately, then on intervals
   await heartbeat();
   await pollJobs();
 
@@ -323,6 +344,6 @@ async function start() {
 }
 
 start().catch((e) => {
-  console.error('Fatal error starting agent:', e);
+  console.error('Fatal agent error:', e);
   process.exit(1);
 });
