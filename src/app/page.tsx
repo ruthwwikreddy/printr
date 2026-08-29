@@ -178,6 +178,7 @@ export default function CustomerPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          tenantId: 'demo-prints',
           filename: fileDetails.filename,
           filePath: fileDetails.filePath,
           mimeType: fileDetails.mimeType,

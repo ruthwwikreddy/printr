@@ -54,8 +54,11 @@ export default function LandingPage() {
             <a href="#how-it-works">How It Works</a>
             <a href="#setup-guide">Shop Setup</a>
             <a href="#author">Creator</a>
+            <Link href="/dashboard" className="btn-mini-landing" style={{ background: '#ffffff', color: '#000000 !important', border: '1px solid var(--border)' }}>
+              Shop Owner Login / Register
+            </Link>
             <Link href="/" className="btn-mini-landing">
-              Open Customer Kiosk <ArrowRight size={13} strokeWidth={2.4} />
+              Live Demo Kiosk <ArrowRight size={13} strokeWidth={2.4} />
             </Link>
           </div>
         </div>
@@ -76,11 +79,14 @@ export default function LandingPage() {
         </p>
 
         <div className="landing-cta-group">
-          <Link href="/" className="btn-landing-primary">
-            Launch Customer Terminal <ArrowRight size={16} strokeWidth={2.4} />
+          <Link href="/dashboard" className="btn-landing-primary">
+            Register / Login Your Shop <ArrowRight size={16} strokeWidth={2.4} />
           </Link>
-          <Link href="/admin" className="btn-landing-secondary">
-            <Server size={15} strokeWidth={2.4} /> Open Store Control Center
+          <Link href="/" className="btn-landing-secondary">
+            <Smartphone size={15} strokeWidth={2.4} /> Try Customer Terminal
+          </Link>
+          <Link href="/super-admin" className="btn-landing-secondary">
+            <ShieldCheck size={15} strokeWidth={2.4} /> Super Admin Dashboard
           </Link>
           <a
             href="https://www.ruthwikreddy.live/"
