@@ -1,5 +1,6 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getFirestore } from 'firebase/firestore';
+import { getStorage } from 'firebase/storage';
 import { getAnalytics, isSupported } from 'firebase/analytics';
 
 const firebaseConfig = {
@@ -15,6 +16,7 @@ const firebaseConfig = {
 // Initialize Firebase (SSR-safe singleton)
 const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 const db = getFirestore(app);
+const storage = getStorage(app);
 
 // Analytics (Client-side only)
 let analytics = null;
@@ -26,4 +28,4 @@ if (typeof window !== 'undefined') {
   });
 }
 
-export { app, db, analytics };
+export { app, db, storage, analytics };

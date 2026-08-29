@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { promises as fs } from 'fs';
 import path from 'path';
+import os from 'os';
 import { PDFDocument } from 'pdf-lib';
 
 export async function POST(request: Request) {
@@ -21,21 +22,23 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'File too large. Maximum size is 50MB.' }, { status: 400 });
     }
 
-    const buffer = Buffer.from(await file.arrayBuffer());
+    const arrayBuffer = await file.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
 
     // Determine page count server-side
     let pageCount = 1;
     if (file.type === 'application/pdf') {
       try {
-        const pdfDoc = await PDFDocument.load(buffer);
+        const pdfDoc = await PDFDocument.load(buffer, { ignoreEncryption: true });
         pageCount = pdfDoc.getPageCount();
-      } catch {
-        return NextResponse.json({ error: 'Could not read PDF. The file may be corrupted.' }, { status: 400 });
+      } catch (pdfErr) {
+        console.error('PDF parsing error:', pdfErr);
+        return NextResponse.json({ error: 'Could not parse PDF. The file may be damaged or password protected.' }, { status: 400 });
       }
     }
 
-    // Save to uploads directory with random filename
-    const uploadDir = path.join(process.cwd(), 'uploads');
+    // Determine temporary storage path (works in Vercel Serverless /tmp and local)
+    const uploadDir = process.env.VERCEL ? path.join(os.tmpdir(), 'uploads') : path.join(process.cwd(), 'uploads');
     await fs.mkdir(uploadDir, { recursive: true });
 
     const ext = path.extname(file.name) || (file.type === 'application/pdf' ? '.pdf' : '.png');
@@ -53,6 +56,6 @@ export async function POST(request: Request) {
     });
   } catch (error: any) {
     console.error('Upload Error:', error);
-    return NextResponse.json({ error: 'Failed to process file upload.' }, { status: 500 });
+    return NextResponse.json({ error: error?.message || 'Failed to process file upload.' }, { status: 500 });
   }
 }

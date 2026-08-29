@@ -1,7 +1,10 @@
 import { promises as fs } from 'fs';
 import path from 'path';
+import os from 'os';
 
-const DB_FILE = path.join(process.cwd(), 'mock_db.json');
+const DB_FILE = process.env.VERCEL
+  ? path.join(os.tmpdir(), 'mock_db.json')
+  : path.join(process.cwd(), 'mock_db.json');
 
 interface DbData {
   orders: any[];
