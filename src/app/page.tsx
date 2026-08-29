@@ -1,734 +1,373 @@
 'use client';
 
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState } from 'react';
+import Link from 'next/link';
 import {
   Printer,
-  UploadCloud,
-  FileText,
-  Image as ImageIcon,
-  Check,
-  X,
-  Minus,
-  Plus,
-  ArrowRight,
-  Loader2,
-  Info,
-  AlertTriangle,
-  Receipt,
-  Hash,
-  CreditCard,
-  Clock,
-  ScanLine,
+  Zap,
+  ShieldCheck,
+  Smartphone,
+  Server,
   Layers,
-  Sparkles,
-  RefreshCw,
+  ArrowRight,
+  CheckCircle2,
+  SlidersHorizontal,
+  QrCode,
+  Globe,
+  Terminal,
+  TrendingUp,
+  Cpu,
+  ExternalLink,
+  ChevronRight,
+  Copy,
+  Check,
 } from 'lucide-react';
 
-type Step = 'upload' | 'configure' | 'payment' | 'status';
-type ColourMode = 'MONOCHROME' | 'COLOUR';
-type PaperSize = 'A4' | 'A3';
-type DuplexMode = 'SIMPLEX' | 'DUPLEX';
+export default function HomePage() {
+  const [copiedCmd, setCopiedCmd] = useState(false);
 
-interface FileDetails {
-  filename: string;
-  filePath: string;
-  mimeType: string;
-  fileSize: number;
-  pageCount: number;
-}
-
-interface OrderInfo {
-  orderId: string;
-  orderNumber: string;
-  amount: number;
-  gatewayOrderId: string;
-}
-
-interface OrderStatus {
-  orderNumber: string;
-  status: string;
-  totalAmount: number;
-  jobStatus: string;
-  printer: string | null;
-  error: string | null;
-}
-
-function formatFileSize(bytes: number) {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / 1024 / 1024).toFixed(2)} MB`;
-}
-
-function getPricePerPage(paper: PaperSize, colour: ColourMode, pricing: Record<string, number>) {
-  const key = `${paper}_${colour}`;
-  return pricing[key] ?? 2;
-}
-
-export default function CustomerPage() {
-  const [step, setStep] = useState<Step>('upload');
-  const [isDragging, setIsDragging] = useState(false);
-  const [isUploading, setIsUploading] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState(0);
-  const [fileDetails, setFileDetails] = useState<FileDetails | null>(null);
-  const [toast, setToast] = useState<{ message: string; type: 'info' | 'error' } | null>(null);
-
-  const [copies, setCopies] = useState(1);
-  const [colourMode, setColourMode] = useState<ColourMode>('MONOCHROME');
-  const [paperSize, setPaperSize] = useState<PaperSize>('A4');
-  const [duplexMode, setDuplexMode] = useState<DuplexMode>('SIMPLEX');
-  const [pageRange, setPageRange] = useState('');
-  const [customerPhone, setCustomerPhone] = useState('');
-
-  const [orderInfo, setOrderInfo] = useState<OrderInfo | null>(null);
-  const [orderStatus, setOrderStatus] = useState<OrderStatus | null>(null);
-  const [isCreatingOrder, setIsCreatingOrder] = useState(false);
-  const [isPaying, setIsPaying] = useState(false);
-
-  // Dynamic shop settings (loaded from Firestore via API)
-  const [settings, setSettings] = useState({
-    upiId: 'shopowner@upi',
-    shopName: 'PrintShop',
-    pricing: {
-      A4_MONOCHROME: 2,
-      A4_COLOUR: 10,
-      A3_MONOCHROME: 5,
-      A3_COLOUR: 20,
-    } as Record<string, number>,
-  });
-
-  useEffect(() => {
-    fetch('/api/admin/settings')
-      .then((r) => r.json())
-      .then((data) => {
-        if (data.settings) setSettings(data.settings);
-      })
-      .catch(() => {});
-  }, []);
-
-  const estimatedPrice = fileDetails
-    ? getPricePerPage(paperSize, colourMode, settings.pricing) * fileDetails.pageCount * copies
-    : 0;
-
-  const showToast = (message: string, type: 'info' | 'error' = 'info') => {
-    setToast({ message, type });
-    setTimeout(() => setToast(null), 3500);
+  const handleCopyCmd = () => {
+    navigator.clipboard.writeText(
+      'git clone https://github.com/ruthwwikreddy/printr.git && cd printr && npm install && npm run agent'
+    );
+    setCopiedCmd(true);
+    setTimeout(() => setCopiedCmd(false), 2000);
   };
-
-  const handleFile = async (file: File) => {
-    const validTypes = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png'];
-    if (!validTypes.includes(file.type)) {
-      showToast('Only PDF, JPG, and PNG files are supported.', 'error');
-      return;
-    }
-    if (file.size > 50 * 1024 * 1024) {
-      showToast('File must be under 50 MB.', 'error');
-      return;
-    }
-
-    setIsUploading(true);
-    setUploadProgress(0);
-
-    const progressInterval = setInterval(() => {
-      setUploadProgress((p) => Math.min(p + 15, 85));
-    }, 200);
-
-    const formData = new FormData();
-    formData.append('file', file);
-
-    try {
-      const res = await fetch('/api/upload', { method: 'POST', body: formData });
-      const data = await res.json();
-      clearInterval(progressInterval);
-
-      if (data.error) {
-        showToast(data.error, 'error');
-        setIsUploading(false);
-        return;
-      }
-      setUploadProgress(100);
-      setTimeout(() => {
-        setFileDetails(data);
-        setStep('configure');
-        setIsUploading(false);
-      }, 350);
-    } catch {
-      clearInterval(progressInterval);
-      showToast('Upload failed. Please check your connection.', 'error');
-      setIsUploading(false);
-    }
-  };
-
-  const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) handleFile(file);
-  };
-
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(false);
-    const file = e.dataTransfer.files[0];
-    if (file) handleFile(file);
-  };
-
-  const handleCreateOrder = async () => {
-    if (!fileDetails) return;
-    setIsCreatingOrder(true);
-    try {
-      const res = await fetch('/api/orders', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          tenantId: 'demo-prints',
-          filename: fileDetails.filename,
-          filePath: fileDetails.filePath,
-          mimeType: fileDetails.mimeType,
-          fileSize: fileDetails.fileSize,
-          pageCount: fileDetails.pageCount,
-          copies,
-          colourMode,
-          paperSize,
-          duplexMode,
-          pageRange: pageRange || null,
-          customerPhone: customerPhone || null,
-        }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        setOrderInfo(data);
-        setStep('payment');
-      } else {
-        showToast(data.error || 'Failed to create order.', 'error');
-      }
-    } catch {
-      showToast('Server error. Please try again.', 'error');
-    } finally {
-      setIsCreatingOrder(false);
-    }
-  };
-
-  const handlePay = async () => {
-    if (!orderInfo) return;
-    setIsPaying(true);
-    try {
-      const res = await fetch('/api/payments/mock-webhook', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ orderId: orderInfo.orderId }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        setStep('status');
-        pollStatus(orderInfo.orderId);
-      } else {
-        showToast('Payment verification failed. Please try again.', 'error');
-      }
-    } catch {
-      showToast('Payment network error.', 'error');
-    } finally {
-      setIsPaying(false);
-    }
-  };
-
-  const pollStatus = useCallback((orderId: string) => {
-    // 1. Instant Real-time Cloud Firestore Listener
-    let unsubscribeFirestore: (() => void) | null = null;
-    import('@/lib/firestoreService').then(({ subscribeToFirestoreOrder }) => {
-      unsubscribeFirestore = subscribeToFirestoreOrder(orderId, (fsOrder) => {
-        if (fsOrder) {
-          setOrderStatus({
-            orderNumber: fsOrder.orderNumber,
-            status: fsOrder.status,
-            totalAmount: fsOrder.totalAmount,
-            jobStatus: fsOrder.jobStatus,
-            printer: fsOrder.printerName || null,
-            error: fsOrder.errorLog || null,
-          });
-        }
-      });
-    }).catch(() => {});
-
-    // 2. HTTP Polling Fallback
-    let attempts = 0;
-    const interval = setInterval(async () => {
-      attempts++;
-      try {
-        const res = await fetch(`/api/orders/${orderId}/status`);
-        const data = await res.json();
-        setOrderStatus(data);
-        if (data.status === 'COMPLETED' || data.status === 'FAILED' || attempts > 60) {
-          clearInterval(interval);
-          if (unsubscribeFirestore) unsubscribeFirestore();
-        }
-      } catch {}
-    }, 3000);
-
-    return () => {
-      clearInterval(interval);
-      if (unsubscribeFirestore) unsubscribeFirestore();
-    };
-  }, []);
-
-  const getPipelineState = (statusLabel: string) => {
-    const s = orderStatus?.status || '';
-    const j = orderStatus?.jobStatus || '';
-    switch (statusLabel) {
-      case 'payment':
-        return 'done';
-      case 'queued':
-        return ['PAID', 'PRINTING', 'QUEUED', 'COMPLETED', 'FAILED'].includes(s) ? 'done' : 'active';
-      case 'printing':
-        if (j === 'PROCESSING') return 'active';
-        if (j === 'COMPLETED') return 'done';
-        if (j === 'FAILED') return 'error';
-        return 'pending';
-      case 'ready':
-        return s === 'COMPLETED' ? 'done' : 'pending';
-      default:
-        return 'pending';
-    }
-  };
-
-  const qrUrl = orderInfo
-    ? `https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(`upi://pay?pa=${settings.upiId}&pn=${encodeURIComponent(settings.shopName)}&am=${orderInfo.amount}&cu=INR&tn=${orderInfo.orderNumber}`)}`
-    : '';
-
-  const steps: { key: Step; label: string }[] = [
-    { key: 'upload', label: 'Upload' },
-    { key: 'configure', label: 'Configure' },
-    { key: 'payment', label: 'Payment' },
-    { key: 'status', label: 'Status' },
-  ];
-  const currentStepIndex = steps.findIndex((s) => s.key === step);
-  const progressPercent = (currentStepIndex / (steps.length - 1)) * 100;
 
   return (
-    <div className="page-wrapper">
-      <div className="portal-container">
-        {/* Header */}
-        <div className="card-header">
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', marginBottom: 12 }}>
-            <div className="brand-row" style={{ margin: 0 }}>
-              <div className="brand-icon-box">
-                <Printer size={18} strokeWidth={2.4} />
-              </div>
-              <h1 className="brand-title">{settings.shopName || 'PrintShop'}</h1>
+    <div className="landing-root">
+      {/* Navigation */}
+      <nav className="landing-nav">
+        <div className="landing-nav-inner">
+          <div className="landing-brand">
+            <div className="brand-icon-box">
+              <Printer size={18} strokeWidth={2.4} />
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <a
-                href="/landing"
-                className="btn-mini"
-                style={{ fontSize: 11.5, padding: '4px 10px', textDecoration: 'none' }}
-              >
-                About &amp; Setup
-              </a>
-              <a
-                href="/admin"
-                className="btn-mini"
-                style={{ fontSize: 11.5, padding: '4px 10px', textDecoration: 'none' }}
-              >
-                Store Admin
-              </a>
+            <div className="brand-text-col">
+              <span className="brand-name">Printr</span>
+              <span className="brand-tagline">Cloud Print OS</span>
             </div>
           </div>
-          <p className="subtitle">Instant Automated Document Printing &middot; Self-Service Terminal</p>
-        </div>
 
-        {/* Elegant Steps Bar */}
-        <div className="steps-bar-container">
-          <div className="steps-nav">
-            <div className="steps-track">
-              <div
-                className="steps-track-fill"
-                style={{ width: `${progressPercent}%` }}
-              />
-            </div>
-            {steps.map((s, i) => {
-              const isDone = currentStepIndex > i;
-              const isActive = step === s.key;
-              return (
-                <div
-                  key={s.key}
-                  className={`step-node ${isActive ? 'active' : ''} ${isDone ? 'done' : ''}`}
-                >
-                  <div className="step-bubble">
-                    {isDone ? <Check size={12} strokeWidth={3} /> : i + 1}
-                  </div>
-                  <span className="step-text">{s.label}</span>
-                </div>
-              );
-            })}
+          <div className="landing-nav-links">
+            <a href="#features">Features</a>
+            <a href="#how-it-works">How It Works</a>
+            <a href="#setup-guide">Shop Setup</a>
+            <a href="#author">Creator</a>
+            <Link href="/dashboard" className="btn-mini-landing" style={{ background: '#ffffff', color: '#000000 !important', border: '1px solid var(--border)' }}>
+              Shop Owner Login / Register
+            </Link>
+            <Link href="/shop/demo-prints" className="btn-mini-landing">
+              Live Demo Kiosk <ArrowRight size={13} strokeWidth={2.4} />
+            </Link>
           </div>
         </div>
+      </nav>
 
-        {/* Body */}
-        <div className="card-body">
-
-          {/* STEP 1 — UPLOAD */}
-          {step === 'upload' && (
-            <div className="upload-zone-wrapper">
-              <div
-                className={`upload-zone ${isDragging ? 'dragover' : ''}`}
-                onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
-                onDragLeave={() => setIsDragging(false)}
-                onDrop={handleDrop}
-              >
-                <input
-                  type="file"
-                  accept=".pdf,.jpg,.jpeg,.png"
-                  onChange={handleFileInput}
-                  disabled={isUploading}
-                />
-                <div className="upload-icon-circle">
-                  <UploadCloud size={24} strokeWidth={2} />
-                </div>
-                {isUploading ? (
-                  <div className="upload-progress-container">
-                    <div className="progress-header">
-                      <span>Analyzing document</span>
-                      <span>{uploadProgress}%</span>
-                    </div>
-                    <div className="progress-bar-track">
-                      <div className="progress-bar-fill" style={{ width: `${uploadProgress}%` }} />
-                    </div>
-                  </div>
-                ) : (
-                  <>
-                    <div className="upload-primary-text">Select or drag your file here</div>
-                    <div className="upload-secondary-text">Fast analysis with automatic page count detection</div>
-                    <div className="upload-supported-badges">
-                      <span className="file-type-pill">PDF</span>
-                      <span className="file-type-pill">JPG</span>
-                      <span className="file-type-pill">PNG</span>
-                      <span className="file-type-pill">MAX 50MB</span>
-                    </div>
-                  </>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* STEP 2 — CONFIGURE */}
-          {step === 'configure' && fileDetails && (
-            <>
-              <div className="file-preview-card">
-                <div className="file-preview-icon">
-                  {fileDetails.mimeType === 'application/pdf'
-                    ? <FileText size={22} strokeWidth={2.2} />
-                    : <ImageIcon size={22} strokeWidth={2.2} />}
-                </div>
-                <div className="file-preview-meta">
-                  <div className="file-preview-name">{fileDetails.filename}</div>
-                  <div className="file-preview-details">
-                    <span>{fileDetails.pageCount} {fileDetails.pageCount === 1 ? 'Page' : 'Pages'}</span>
-                    <span>&middot;</span>
-                    <span>{formatFileSize(fileDetails.fileSize)}</span>
-                  </div>
-                </div>
-                <button
-                  className="file-change-btn"
-                  onClick={() => { setFileDetails(null); setStep('upload'); }}
-                >
-                  Change
-                </button>
-              </div>
-
-              <div className="form-grid">
-                <div className="form-group">
-                  <label className="form-label">Color Mode</label>
-                  <select
-                    className="form-select"
-                    value={colourMode}
-                    onChange={(e) => setColourMode(e.target.value as ColourMode)}
-                  >
-                    <option value="MONOCHROME">Black &amp; White (INR {getPricePerPage(paperSize, 'MONOCHROME', settings.pricing)}/pg)</option>
-                    <option value="COLOUR">Full Color (INR {getPricePerPage(paperSize, 'COLOUR', settings.pricing)}/pg)</option>
-                  </select>
-                </div>
-
-                <div className="form-group">
-                  <label className="form-label">Paper Size</label>
-                  <select
-                    className="form-select"
-                    value={paperSize}
-                    onChange={(e) => setPaperSize(e.target.value as PaperSize)}
-                  >
-                    <option value="A4">A4 (Standard Document)</option>
-                    <option value="A3">A3 (Large Print)</option>
-                  </select>
-                </div>
-
-                <div className="form-group">
-                  <label className="form-label">Number of Copies</label>
-                  <div className="copies-stepper">
-                    <button
-                      className="stepper-btn"
-                      onClick={() => setCopies((c) => Math.max(1, c - 1))}
-                      disabled={copies <= 1}
-                      aria-label="Decrease copies"
-                    >
-                      <Minus size={15} strokeWidth={2.5} />
-                    </button>
-                    <span className="stepper-value">{copies}</span>
-                    <button
-                      className="stepper-btn"
-                      onClick={() => setCopies((c) => Math.min(99, c + 1))}
-                      aria-label="Increase copies"
-                    >
-                      <Plus size={15} strokeWidth={2.5} />
-                    </button>
-                  </div>
-                </div>
-
-                <div className="form-group">
-                  <label className="form-label">Sides</label>
-                  <select
-                    className="form-select"
-                    value={duplexMode}
-                    onChange={(e) => setDuplexMode(e.target.value as DuplexMode)}
-                  >
-                    <option value="SIMPLEX">Single-Sided</option>
-                    <option value="DUPLEX">Double-Sided</option>
-                  </select>
-                </div>
-
-                <div className="form-group full-width">
-                  <label className="form-label">Page Range (Optional)</label>
-                  <input
-                    className="form-input"
-                    placeholder="All pages or custom (e.g. 1-5, 8, 11-13)"
-                    value={pageRange}
-                    onChange={(e) => setPageRange(e.target.value)}
-                  />
-                </div>
-
-                <div className="form-group full-width">
-                  <label className="form-label">Mobile Number (Optional)</label>
-                  <input
-                    className="form-input"
-                    placeholder="For order tracking & receipt"
-                    value={customerPhone}
-                    onChange={(e) => setCustomerPhone(e.target.value)}
-                    type="tel"
-                  />
-                </div>
-              </div>
-
-              <div className="price-box">
-                <div>
-                  <div className="price-label">Total Amount</div>
-                  <div className="price-amount">INR {estimatedPrice.toFixed(2)}</div>
-                </div>
-                <button
-                  className="btn"
-                  style={{ width: 'auto', padding: '12px 24px' }}
-                  onClick={handleCreateOrder}
-                  disabled={isCreatingOrder}
-                >
-                  {isCreatingOrder ? (
-                    <>
-                      <Loader2 size={16} className="spin" strokeWidth={2.5} />
-                      Processing
-                    </>
-                  ) : (
-                    <>
-                      Proceed to Pay <ArrowRight size={16} strokeWidth={2.5} />
-                    </>
-                  )}
-                </button>
-              </div>
-            </>
-          )}
-
-          {/* STEP 3 — PAYMENT */}
-          {step === 'payment' && orderInfo && (
-            <>
-              <div className="payment-amount-card">
-                <div className="label">Total Payable</div>
-                <div className="amount">INR {orderInfo.amount.toFixed(2)}</div>
-              </div>
-
-              <div className="qr-section">
-                <div className="qr-title">
-                  <ScanLine size={14} strokeWidth={2.5} /> Scan UPI QR to Pay
-                </div>
-                <div className="qr-box">
-                  <img src={qrUrl} alt="UPI QR Code" />
-                </div>
-                <div className="qr-id-row">
-                  UPI ID: <strong>{settings.upiId}</strong>
-                </div>
-              </div>
-
-              <div className="order-summary-list">
-                <div className="order-summary-row">
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                    <Hash size={12} strokeWidth={2} /> Order ID
-                  </span>
-                  <span style={{ fontFamily: 'var(--font-mono)' }}>{orderInfo.orderNumber}</span>
-                </div>
-                <div className="order-summary-row">
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                    <CreditCard size={12} strokeWidth={2} /> Amount
-                  </span>
-                  <span style={{ fontFamily: 'var(--font-mono)' }}>INR {orderInfo.amount.toFixed(2)}</span>
-                </div>
-                <div className="order-summary-row">
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                    <Layers size={12} strokeWidth={2} /> Pages &times; Copies
-                  </span>
-                  <span>{fileDetails?.pageCount} pages &times; {copies} {copies > 1 ? 'copies' : 'copy'}</span>
-                </div>
-                <div className="order-summary-row">
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                    <Receipt size={12} strokeWidth={2} /> Configuration
-                  </span>
-                  <span>
-                    {colourMode === 'MONOCHROME' ? 'B&W' : 'Color'} &middot; {paperSize} &middot; {duplexMode === 'SIMPLEX' ? '1-Sided' : '2-Sided'}
-                  </span>
-                </div>
-              </div>
-
-              <button className="btn" onClick={handlePay} disabled={isPaying}>
-                {isPaying ? (
-                  <>
-                    <Loader2 size={16} className="spin" strokeWidth={2.5} /> Confirming Payment
-                  </>
-                ) : (
-                  <>
-                    <Check size={16} strokeWidth={3} /> I Have Paid &mdash; Start Printing
-                  </>
-                )}
-              </button>
-            </>
-          )}
-
-          {/* STEP 4 — STATUS */}
-          {step === 'status' && (
-            <>
-              {!orderStatus ? (
-                <div className="status-head">
-                  <div className="status-avatar spinning" />
-                  <div className="status-order-tag">{orderInfo?.orderNumber}</div>
-                  <div className="status-sub-info">Connecting to local print queue</div>
-                </div>
-              ) : (
-                <>
-                  <div className="status-head">
-                    {orderStatus.status === 'COMPLETED' ? (
-                      <div className="status-avatar success">
-                        <Check size={32} strokeWidth={3} />
-                      </div>
-                    ) : orderStatus.status === 'FAILED' ? (
-                      <div className="status-avatar error">
-                        <X size={32} strokeWidth={3} />
-                      </div>
-                    ) : (
-                      <div className="status-avatar spinning" />
-                    )}
-                    <div className="status-order-tag">{orderStatus.orderNumber}</div>
-                    <div className="status-sub-info">Live Queue Dispatch Status</div>
-                  </div>
-
-                  <div className="pipeline-card">
-                    {[
-                      { label: 'payment', title: 'Payment verified' },
-                      { label: 'queued', title: 'Dispatched to print queue' },
-                      { label: 'printing', title: 'Physical printing in progress' },
-                      { label: 'ready', title: 'Completed and ready for pickup' },
-                    ].map(({ label, title }) => {
-                      const state = getPipelineState(label);
-                      return (
-                        <div className="pipeline-row" key={label}>
-                          <div className="pipeline-name">
-                            <div className={`pipeline-dot ${state}`} />
-                            {title}
-                          </div>
-                          <div className={`pipeline-tag ${state}`}>
-                            {state === 'done' ? (
-                              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                                <Check size={12} strokeWidth={3} /> Done
-                              </span>
-                            ) : state === 'active' ? (
-                              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                                <Loader2 size={12} className="spin" strokeWidth={3} /> Active
-                              </span>
-                            ) : state === 'error' ? (
-                              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                                <X size={12} strokeWidth={3} /> Issue
-                              </span>
-                            ) : (
-                              <span>Pending</span>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-
-                  {orderStatus.status === 'COMPLETED' && (
-                    <div className="status-alert success">
-                      <div className="status-alert-title">
-                        <Check size={18} strokeWidth={3} /> Print Complete
-                      </div>
-                      <div className="status-alert-body">
-                        Your print job is ready at the counter. Please present Order ID <strong style={{ color: '#fff', fontFamily: 'var(--font-mono)' }}>{orderStatus.orderNumber}</strong> for collection.
-                      </div>
-                    </div>
-                  )}
-
-                  {orderStatus.status === 'FAILED' && (
-                    <div className="status-alert error">
-                      <div className="status-alert-title">
-                        <AlertTriangle size={18} strokeWidth={2.4} /> Print Job Alert
-                      </div>
-                      <div className="status-alert-body">
-                        Payment was verified successfully. Please inform the store desk with Order ID <strong style={{ fontFamily: 'var(--font-mono)' }}>{orderStatus.orderNumber}</strong> to print manually.
-                      </div>
-                    </div>
-                  )}
-
-                  {!['COMPLETED', 'FAILED'].includes(orderStatus.status) && (
-                    <div className="text-muted" style={{ display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'center', fontSize: 12, marginTop: 16 }}>
-                      <Clock size={13} strokeWidth={2.2} />
-                      Keep this window open. Your pages will print directly.
-                    </div>
-                  )}
-                </>
-              )}
-            </>
-          )}
-
+      {/* Hero Section */}
+      <header className="landing-hero">
+        <div className="landing-hero-badge">
+          <Zap size={12} strokeWidth={2.8} />
+          <span>Next-Gen Autonomous Print Infrastructure for Xerox &amp; Print Centers</span>
         </div>
-      </div>
+        <h1 className="landing-hero-title">
+          Turn Any Printer Into A<br />
+          <span>Self-Service Cloud Print Station</span>
+        </h1>
+        <p className="landing-hero-desc">
+          Printr eliminates counter congestion. Customers upload files directly from their phone, customize pages, pay via dynamic UPI QR code, and your physical printers automatically dispatch the job in seconds with zero manual handling.
+        </p>
 
-      {/* Footer Info */}
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, fontSize: 12, marginTop: 28, color: 'var(--text-secondary)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-          <a href="/landing" style={{ textDecoration: 'underline' }}>Product Overview</a>
-          <span>&middot;</span>
-          <a href="/admin" style={{ textDecoration: 'underline' }}>Admin Dashboard</a>
-          <span>&middot;</span>
+        <div className="landing-cta-group">
+          <Link href="/dashboard" className="btn-landing-primary">
+            Register / Login Your Shop <ArrowRight size={16} strokeWidth={2.4} />
+          </Link>
+          <Link href="/shop/demo-prints" className="btn-landing-secondary">
+            <Smartphone size={15} strokeWidth={2.4} /> Try Customer Terminal
+          </Link>
+          <Link href="/super-admin" className="btn-landing-secondary">
+            <ShieldCheck size={15} strokeWidth={2.4} /> Super Admin Dashboard
+          </Link>
           <a
             href="https://www.ruthwikreddy.live/"
             target="_blank"
             rel="noopener noreferrer"
-            style={{ fontWeight: 600, color: 'var(--text-primary)' }}
+            className="btn-landing-secondary"
           >
-            Built by Ruthwik Reddy &nearr;
+            <Globe size={15} strokeWidth={2.4} /> Developed by Ruthwik Reddy
           </a>
         </div>
-        <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-          Printr Cloud &middot; Autonomous Xerox &amp; Print Automation System
-        </div>
-      </div>
 
-      {/* Toast */}
-      {toast && (
-        <div className={`toast-bar show ${toast.type === 'error' ? 'error' : ''}`}>
-          {toast.type === 'error' ? <AlertTriangle size={14} strokeWidth={2.5} /> : <Info size={14} strokeWidth={2.5} />}
-          {toast.message}
+        {/* Hero Interactive Terminal Widget */}
+        <div className="landing-terminal-preview">
+          <div className="landing-terminal-header">
+            <div className="terminal-dots">
+              <span className="dot dot-1"></span>
+              <span className="dot dot-2"></span>
+              <span className="dot dot-3"></span>
+            </div>
+            <div className="terminal-title">printr-agent — macOS / Linux / Windows daemon</div>
+            <button className="terminal-copy-btn" onClick={handleCopyCmd} title="Copy setup command">
+              {copiedCmd ? <Check size={13} strokeWidth={2.5} /> : <Copy size={13} strokeWidth={2} />}
+              <span>{copiedCmd ? 'Copied' : 'Copy'}</span>
+            </button>
+          </div>
+          <div className="landing-terminal-body">
+            <p className="terminal-line"><span className="term-prompt">$</span> printr connect --backend https://printr.ruthwikreddy.live</p>
+            <p className="terminal-line text-muted">[2026-08-29 14:40:02] Connected to Printr Cloud Stream</p>
+            <p className="terminal-line text-muted">[2026-08-29 14:40:03] Detected Printers: HP_Deskjet_3540_series, Canon_LBP2900, Epson_L3150</p>
+            <p className="terminal-line text-highlight">[2026-08-29 14:40:15] ORDER #PRN-9402: Payment Verified (INR 12.00) via UPI</p>
+            <p className="terminal-line text-highlight">[2026-08-29 14:40:16] Dispatched 6 pages [A4 MONOCHROME DUPLEX] → HP_Deskjet_3540_series</p>
+            <p className="terminal-line text-success">✓ Print Job Completed. Ready for counter pickup.</p>
+          </div>
         </div>
-      )}
+      </header>
+
+      {/* Metrics Row */}
+      <section className="landing-metrics-strip">
+        <div className="metric-box">
+          <div className="metric-number">&lt; 3 sec</div>
+          <div className="metric-label">Cloud-to-Printer Dispatch Latency</div>
+        </div>
+        <div className="metric-box">
+          <div className="metric-number">100%</div>
+          <div className="metric-label">Automated Zero-Staff Intervention</div>
+        </div>
+        <div className="metric-box">
+          <div className="metric-number">Direct UPI</div>
+          <div className="metric-label">0% Platform Fee · Money straight to shop</div>
+        </div>
+        <div className="metric-box">
+          <div className="metric-number">Scalable</div>
+          <div className="metric-label">Deploy across 100+ branches simultaneously</div>
+        </div>
+      </section>
+
+      {/* Core Features */}
+      <section id="features" className="landing-section">
+        <div className="section-badge">ENGINEERED FOR MULTI-SHOP SCALE</div>
+        <h2 className="section-heading">Everything a Modern Xerox &amp; Print Business Needs</h2>
+        <p className="section-subheading">
+          Built with an enterprise-grade stack so you can onboard dozens of franchise branches or campus printing spots with isolated configuration.
+        </p>
+
+        <div className="features-grid">
+          <div className="feature-card">
+            <div className="feature-icon">
+              <QrCode size={22} strokeWidth={2.4} />
+            </div>
+            <h3 className="feature-title">Dynamic UPI QR Code</h3>
+            <p className="feature-desc">
+              Every order generates an on-the-fly QR code containing your exact UPI ID and dynamic amount. Payments go directly into the store owner bank account without middlemen.
+            </p>
+          </div>
+
+          <div className="feature-card">
+            <div className="feature-icon">
+              <Cpu size={22} strokeWidth={2.4} />
+            </div>
+            <h3 className="feature-title">Cross-Platform Background Agent</h3>
+            <p className="feature-desc">
+              Lightweight Node.js agent runs natively via CUPS / LP on macOS and Linux, and via Powershell on Windows. Auto-recovers on reboots with PM2.
+            </p>
+          </div>
+
+          <div className="feature-card">
+            <div className="feature-icon">
+              <SlidersHorizontal size={22} strokeWidth={2.4} />
+            </div>
+            <h3 className="feature-title">Live Rate &amp; UPI Customization</h3>
+            <p className="feature-desc">
+              Store managers can update A4/A3, Color, and Black &amp; White rates, shop name, and UPI ID on the fly from the admin panel without modifying any code.
+            </p>
+          </div>
+
+          <div className="feature-card">
+            <div className="feature-icon">
+              <Layers size={22} strokeWidth={2.4} />
+            </div>
+            <h3 className="feature-title">Auto PDF Page Detection</h3>
+            <p className="feature-desc">
+              Instant server-side PDF parsing extracts true page counts, preventing customer fraud and calculating bill totals automatically.
+            </p>
+          </div>
+
+          <div className="feature-card">
+            <div className="feature-icon">
+              <TrendingUp size={22} strokeWidth={2.4} />
+            </div>
+            <h3 className="feature-title">Real-Time Control Center</h3>
+            <p className="feature-desc">
+              Live dashboard monitoring queue health, printer hardware status, daily revenue, and one-click reprint/cancel controls.
+            </p>
+          </div>
+
+          <div className="feature-card">
+            <div className="feature-icon">
+              <ShieldCheck size={22} strokeWidth={2.4} />
+            </div>
+            <h3 className="feature-title">Multi-Shop Franchise Ready</h3>
+            <p className="feature-desc">
+              Each store connects via a dedicated secret auth token. Easily scale from 1 counter to 1,000 store locations across college campuses and cities.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      {/* How It Works */}
+      <section id="how-it-works" className="landing-section bg-subtle-section">
+        <div className="section-badge">USER JOURNEY</div>
+        <h2 className="section-heading">How Printr Automates the Entire Workflow</h2>
+        <p className="section-subheading">From customer mobile device to physical paper tray in 4 simple steps.</p>
+
+        <div className="steps-cards-grid">
+          <div className="flow-card">
+            <div className="flow-num">01</div>
+            <h4 className="flow-title">Customer Scans &amp; Uploads</h4>
+            <p className="flow-desc">
+              Customer scans your shop poster QR code to open the mobile web portal. They select PDF, JPG, or PNG files with instant page analysis.
+            </p>
+          </div>
+
+          <div className="flow-card">
+            <div className="flow-num">02</div>
+            <h4 className="flow-title">Custom Options &amp; Billing</h4>
+            <p className="flow-desc">
+              Customer chooses copies, single/double sided, A4/A3, and color mode. Total bill is calculated dynamically based on store rates.
+            </p>
+          </div>
+
+          <div className="flow-card">
+            <div className="flow-num">03</div>
+            <h4 className="flow-title">UPI Payment</h4>
+            <p className="flow-desc">
+              Customer scans the UPI QR code directly on their phone using GPay, PhonePe, Paytm, or CRED to clear payment in 5 seconds.
+            </p>
+          </div>
+
+          <div className="flow-card">
+            <div className="flow-num">04</div>
+            <h4 className="flow-title">Automatic Physical Print</h4>
+            <p className="flow-desc">
+              Your computer print agent immediately receives the secure job payload, downloads the file, and sends native print commands to the printer.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      {/* Setup Guide for Store Owners */}
+      <section id="setup-guide" className="landing-section">
+        <div className="section-badge">SCALE TO NEW SHOPS</div>
+        <h2 className="section-heading">Deploying Printr to a New Print / Xerox Shop in 3 Minutes</h2>
+        <p className="section-subheading">
+          Setting up a new counter requires zero specialized hardware — any existing PC or Mac connected to your USB/Wi-Fi printer works out of the box.
+        </p>
+
+        <div className="instructions-panel">
+          <div className="instruction-step">
+            <div className="instruction-badge">Step 1</div>
+            <div className="instruction-content">
+              <h4>Open Dashboard &amp; Register Shop</h4>
+              <p>Go to <Link href="/dashboard" style={{ textDecoration: 'underline', fontWeight: 600 }}>/dashboard</Link> to create your shop account, set your UPI ID (e.g. <code>store@upi</code>), and customize your per-page rates.</p>
+            </div>
+          </div>
+
+          <div className="instruction-step">
+            <div className="instruction-badge">Step 2</div>
+            <div className="instruction-content">
+              <h4>Connect the Shop Computer Print Agent</h4>
+              <p>On the counter laptop or PC connected to your printer, start the background agent process:</p>
+              <div className="code-snippet-box">
+                <code>TENANT_ID="your-shop-slug" BACKEND_URL="https://printr.ruthwikreddy.live" PRINT_AGENT_AUTH_SECRET="your-auth-token" node print-agent/agent.js</code>
+              </div>
+            </div>
+          </div>
+
+          <div className="instruction-step">
+            <div className="instruction-badge">Step 3</div>
+            <div className="instruction-content">
+              <h4>Keep Running 24/7 with PM2 (Mac &amp; Windows)</h4>
+              <p>Ensure the print service launches automatically whenever the store computer boots:</p>
+              <div className="code-snippet-box">
+                <code>pm2 start ecosystem.config.js &amp;&amp; pm2 save &amp;&amp; pm2 startup</code>
+              </div>
+            </div>
+          </div>
+
+          <div className="instruction-step">
+            <div className="instruction-badge">Step 4</div>
+            <div className="instruction-content">
+              <h4>Print Your Counter QR Standee</h4>
+              <p>Download and print your store QR poster from <code>/shop/[slug]/standee</code>. Place it at the desk so customers scan and print independently.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Author & Engineering Credential Section */}
+      <section id="author" className="landing-section bg-subtle-section">
+        <div className="author-card">
+          <div className="author-details">
+            <div className="section-badge">SYSTEM ARCHITECT</div>
+            <h2 className="author-name">Engineered &amp; Built by Ruthwik Reddy</h2>
+            <p className="author-bio">
+              Printr was designed and engineered by <strong>Ruthwik Reddy</strong> to revolutionize decentralized hardware automation and self-service commerce workflows.
+            </p>
+            <div className="author-links">
+              <a
+                href="https://www.ruthwikreddy.live/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="btn-landing-primary"
+              >
+                Visit Official Portfolio (ruthwikreddy.live) <ExternalLink size={14} strokeWidth={2.4} />
+              </a>
+              <a
+                href="https://github.com/ruthwwikreddy/printr"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="btn-landing-secondary"
+              >
+                <Terminal size={14} strokeWidth={2.4} /> GitHub Repository
+              </a>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Footer */}
+      <footer className="landing-footer">
+        <div className="footer-inner">
+          <div className="footer-brand">
+            <div className="brand-icon-box">
+              <Printer size={16} strokeWidth={2.4} />
+            </div>
+            <span>Printr — Cloud Smart Print Automation</span>
+          </div>
+
+          <div className="footer-copy">
+            &copy; {new Date().getFullYear()} Printr. Built with pride by{' '}
+            <a
+              href="https://www.ruthwikreddy.live/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="author-link"
+            >
+              Ruthwik Reddy
+            </a>
+            .
+          </div>
+
+          <div className="footer-links">
+            <Link href="/dashboard">Shop Owner Portal</Link>
+            <Link href="/super-admin">Super Admin</Link>
+            <Link href="/shop/demo-prints">Demo Kiosk</Link>
+            <a href="https://www.ruthwikreddy.live/" target="_blank" rel="noopener noreferrer">
+              ruthwikreddy.live
+            </a>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }
