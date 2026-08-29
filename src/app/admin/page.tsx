@@ -19,8 +19,9 @@ import {
   CircleDot,
   CheckCircle2,
   Search,
-  ArrowUpRight,
   ExternalLink,
+  QrCode,
+  Store,
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -83,14 +84,18 @@ export default function AdminDashboard() {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<FilterStatus>('ALL');
 
+  const [upiId, setUpiId] = useState('shopowner@upi');
+  const [shopName, setShopName] = useState('PrintShop');
   const [pricing, setPricing] = useState({
     A4_MONOCHROME: 2,
     A4_COLOUR: 10,
     A3_MONOCHROME: 5,
     A3_COLOUR: 20,
   });
+  const [settingsLoading, setSettingsLoading] = useState(true);
   const [pricingSaving, setPricingSaving] = useState(false);
   const [pricingSaved, setPricingSaved] = useState(false);
+  const [settingsError, setSettingsError] = useState<string | null>(null);
 
   const fetchData = async () => {
     try {
@@ -104,15 +109,39 @@ export default function AdminDashboard() {
     setLoading(false);
   };
 
+  const fetchSettings = async () => {
+    setSettingsLoading(true);
+    try {
+      const res = await fetch('/api/admin/settings');
+      const data = await res.json();
+      if (data.settings) {
+        setUpiId(data.settings.upiId || 'shopowner@upi');
+        setShopName(data.settings.shopName || 'PrintShop');
+        if (data.settings.pricing) {
+          setPricing({
+            A4_MONOCHROME: data.settings.pricing.A4_MONOCHROME ?? 2,
+            A4_COLOUR: data.settings.pricing.A4_COLOUR ?? 10,
+            A3_MONOCHROME: data.settings.pricing.A3_MONOCHROME ?? 5,
+            A3_COLOUR: data.settings.pricing.A3_COLOUR ?? 20,
+          });
+        }
+      }
+    } catch {
+      setSettingsError('Could not load settings from cloud.');
+    } finally {
+      setSettingsLoading(false);
+    }
+  };
+
   useEffect(() => {
     fetchData();
+    fetchSettings();
 
     // 1. Instant Real-time Cloud Firestore listener for admin orders
     let unsubscribeFirestore: (() => void) | null = null;
     import('@/lib/firestoreService').then(({ subscribeToAllFirestoreOrders }) => {
       unsubscribeFirestore = subscribeToAllFirestoreOrders((fsOrders) => {
         if (fsOrders && fsOrders.length > 0) {
-          // Format into component Order shape
           const mapped: Order[] = fsOrders.map((fso) => ({
             id: fso.id,
             orderNumber: fso.orderNumber,
@@ -168,18 +197,22 @@ export default function AdminDashboard() {
 
   const handleSavePricing = async () => {
     setPricingSaving(true);
-    const entries = Object.entries(pricing);
-    for (const [key, value] of entries) {
-      const [paperSize, colourMode] = key.split('_');
-      await fetch('/api/admin/pricing', {
+    setSettingsError(null);
+    try {
+      const res = await fetch('/api/admin/settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ paperSize, colourMode, pricePerPage: value }),
+        body: JSON.stringify({ upiId, shopName, pricing }),
       });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.error || 'Save failed');
+      setPricingSaved(true);
+      setTimeout(() => setPricingSaved(false), 2500);
+    } catch (e: any) {
+      setSettingsError(e?.message || 'Failed to save settings.');
+    } finally {
+      setPricingSaving(false);
     }
-    setPricingSaving(false);
-    setPricingSaved(true);
-    setTimeout(() => setPricingSaved(false), 2000);
   };
 
   const filteredOrders = useMemo(() => {
@@ -500,15 +533,89 @@ export default function AdminDashboard() {
       {/* PRICING TAB */}
       {tab === 'pricing' && (
         <div className="pricing-section-container">
+
+          {/* UPI & Shop Settings */}
+          <div className="table-panel" style={{ marginBottom: 20 }}>
+            <div className="table-panel-header">
+              <div className="table-panel-title">
+                <QrCode size={16} strokeWidth={2.4} /> Payment Settings
+              </div>
+              {settingsLoading && (
+                <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>Loading from cloud...</span>
+              )}
+            </div>
+            <div style={{ padding: '24px 28px' }}>
+              <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6, marginBottom: 20 }}>
+                Your UPI ID is embedded in the payment QR code shown to customers. Changes take effect immediately on the next order.
+              </p>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                <div>
+                  <label className="form-label" style={{ display: 'block', marginBottom: 6, fontSize: 12, fontWeight: 600 }}>
+                    <QrCode size={12} strokeWidth={2.5} style={{ display: 'inline', marginRight: 5 }} />
+                    UPI ID
+                  </label>
+                  <input
+                    className="form-input pricing-field"
+                    style={{ width: '100%', fontFamily: 'var(--font-mono)', fontSize: 13 }}
+                    placeholder="yourname@upi"
+                    value={upiId}
+                    onChange={(e) => setUpiId(e.target.value)}
+                    disabled={settingsLoading}
+                  />
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
+                    e.g. ruthwik@okaxis, shop@ybl, 9876543210@paytm
+                  </div>
+                </div>
+                <div>
+                  <label className="form-label" style={{ display: 'block', marginBottom: 6, fontSize: 12, fontWeight: 600 }}>
+                    <Store size={12} strokeWidth={2.5} style={{ display: 'inline', marginRight: 5 }} />
+                    Shop Name (shown in QR)
+                  </label>
+                  <input
+                    className="form-input pricing-field"
+                    style={{ width: '100%', fontSize: 13 }}
+                    placeholder="PrintShop"
+                    value={shopName}
+                    onChange={(e) => setShopName(e.target.value)}
+                    disabled={settingsLoading}
+                  />
+                </div>
+              </div>
+
+              {/* Live QR Preview */}
+              {upiId && (
+                <div style={{ marginTop: 20, display: 'flex', alignItems: 'flex-start', gap: 20 }}>
+                  <div>
+                    <div style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 8 }}>LIVE QR PREVIEW</div>
+                    <div style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 10, display: 'inline-block', background: '#fff' }}>
+                      <img
+                        src={`https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent(`upi://pay?pa=${upiId}&pn=${encodeURIComponent(shopName)}&cu=INR`)}`}
+                        alt="UPI QR Preview"
+                        style={{ display: 'block', width: 120, height: 120 }}
+                      />
+                    </div>
+                  </div>
+                  <div style={{ paddingTop: 28 }}>
+                    <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.7 }}>
+                      <strong style={{ fontFamily: 'var(--font-mono)', fontSize: 13 }}>{upiId}</strong><br />
+                      <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>Customers will scan this to pay</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Pricing */}
           <div className="table-panel">
             <div className="table-panel-header">
               <div className="table-panel-title">
                 <Banknote size={16} strokeWidth={2.4} /> Rate Card Configuration
               </div>
             </div>
-            <div style={{ padding: '28px' }}>
+            <div style={{ padding: '24px 28px' }}>
               <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6, marginBottom: 20 }}>
-                Configure per-page unit rates for all supported paper formats and color modes. Updated pricing is applied live across the entire customer portal immediately.
+                Configure per-page unit rates for all supported paper formats and color modes. Updated pricing applies live across the customer portal.
               </p>
 
               <div className="pricing-grid-clean">
@@ -533,6 +640,7 @@ export default function AdminDashboard() {
                         onChange={(e) =>
                           setPricing((p) => ({ ...p, [key]: parseFloat(e.target.value) || 0 }))
                         }
+                        disabled={settingsLoading}
                       />
                       <span className="pricing-unit">/ page</span>
                     </div>
@@ -540,25 +648,25 @@ export default function AdminDashboard() {
                 ))}
               </div>
 
+              {settingsError && (
+                <div style={{ marginTop: 16, fontSize: 12.5, color: '#c0392b', fontWeight: 500 }}>
+                  {settingsError}
+                </div>
+              )}
+
               <div style={{ marginTop: 28 }}>
                 <button
                   className="btn"
                   onClick={handleSavePricing}
-                  disabled={pricingSaving}
-                  style={{ maxWidth: 220 }}
+                  disabled={pricingSaving || settingsLoading}
+                  style={{ maxWidth: 280 }}
                 >
                   {pricingSaved ? (
-                    <>
-                      <Check size={16} strokeWidth={3} /> Rates Saved
-                    </>
+                    <><Check size={16} strokeWidth={3} /> Settings Saved</>
                   ) : pricingSaving ? (
-                    <>
-                      <RefreshCw size={16} className="spin" strokeWidth={2.5} /> Updating Rates
-                    </>
+                    <><RefreshCw size={16} className="spin" strokeWidth={2.5} /> Saving to Cloud</>
                   ) : (
-                    <>
-                      <Save size={16} strokeWidth={2.5} /> Save Rates
-                    </>
+                    <><Save size={16} strokeWidth={2.5} /> Save UPI ID & Rates</>
                   )}
                 </button>
               </div>

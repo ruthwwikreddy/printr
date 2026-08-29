@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   Printer,
   UploadCloud,
@@ -59,12 +59,9 @@ function formatFileSize(bytes: number) {
   return `${(bytes / 1024 / 1024).toFixed(2)} MB`;
 }
 
-function getPricePerPage(paper: PaperSize, colour: ColourMode) {
-  if (paper === 'A4' && colour === 'MONOCHROME') return 2;
-  if (paper === 'A4' && colour === 'COLOUR') return 10;
-  if (paper === 'A3' && colour === 'MONOCHROME') return 5;
-  if (paper === 'A3' && colour === 'COLOUR') return 20;
-  return 2;
+function getPricePerPage(paper: PaperSize, colour: ColourMode, pricing: Record<string, number>) {
+  const key = `${paper}_${colour}`;
+  return pricing[key] ?? 2;
 }
 
 export default function CustomerPage() {
@@ -87,8 +84,29 @@ export default function CustomerPage() {
   const [isCreatingOrder, setIsCreatingOrder] = useState(false);
   const [isPaying, setIsPaying] = useState(false);
 
+  // Dynamic shop settings (loaded from Firestore via API)
+  const [settings, setSettings] = useState({
+    upiId: 'shopowner@upi',
+    shopName: 'PrintShop',
+    pricing: {
+      A4_MONOCHROME: 2,
+      A4_COLOUR: 10,
+      A3_MONOCHROME: 5,
+      A3_COLOUR: 20,
+    } as Record<string, number>,
+  });
+
+  useEffect(() => {
+    fetch('/api/admin/settings')
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.settings) setSettings(data.settings);
+      })
+      .catch(() => {});
+  }, []);
+
   const estimatedPrice = fileDetails
-    ? getPricePerPage(paperSize, colourMode) * fileDetails.pageCount * copies
+    ? getPricePerPage(paperSize, colourMode, settings.pricing) * fileDetails.pageCount * copies
     : 0;
 
   const showToast = (message: string, type: 'info' | 'error' = 'info') => {
@@ -270,7 +288,7 @@ export default function CustomerPage() {
   };
 
   const qrUrl = orderInfo
-    ? `https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=upi://pay?pa=shopowner@upi%26pn=PrintShop%26am=${orderInfo.amount}%26cu=INR%26tn=${orderInfo.orderNumber}`
+    ? `https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(`upi://pay?pa=${settings.upiId}&pn=${encodeURIComponent(settings.shopName)}&am=${orderInfo.amount}&cu=INR&tn=${orderInfo.orderNumber}`)}`
     : '';
 
   const steps: { key: Step; label: string }[] = [
@@ -403,8 +421,8 @@ export default function CustomerPage() {
                     value={colourMode}
                     onChange={(e) => setColourMode(e.target.value as ColourMode)}
                   >
-                    <option value="MONOCHROME">Black &amp; White (INR {getPricePerPage(paperSize, 'MONOCHROME')}/pg)</option>
-                    <option value="COLOUR">Full Color (INR {getPricePerPage(paperSize, 'COLOUR')}/pg)</option>
+                    <option value="MONOCHROME">Black &amp; White (INR {getPricePerPage(paperSize, 'MONOCHROME', settings.pricing)}/pg)</option>
+                    <option value="COLOUR">Full Color (INR {getPricePerPage(paperSize, 'COLOUR', settings.pricing)}/pg)</option>
                   </select>
                 </div>
 
@@ -518,7 +536,7 @@ export default function CustomerPage() {
                   <img src={qrUrl} alt="UPI QR Code" />
                 </div>
                 <div className="qr-id-row">
-                  UPI ID: <strong>shopowner@upi</strong>
+                  UPI ID: <strong>{settings.upiId}</strong>
                 </div>
               </div>
 
