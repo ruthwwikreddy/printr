@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://printr.ruthwikreddy.live/sitemap.xml

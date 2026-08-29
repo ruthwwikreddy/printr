@@ -255,15 +255,33 @@ export default function AdminDashboard() {
           </div>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <Link
+            href="/landing"
+            className="btn-mini"
+            style={{ textDecoration: 'none' }}
+          >
+            Product &amp; Setup Guide
+          </Link>
+
           <Link
             href="/"
             className="btn-mini"
             style={{ textDecoration: 'none' }}
             target="_blank"
           >
-            Customer Portal <ExternalLink size={12} strokeWidth={2.5} />
+            Customer Kiosk <ExternalLink size={12} strokeWidth={2.5} />
           </Link>
+
+          <a
+            href="https://www.ruthwikreddy.live/"
+            className="btn-mini"
+            style={{ textDecoration: 'none', fontWeight: 600 }}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            ruthwikreddy.live &nearr;
+          </a>
 
           <div className="admin-tabs">
             <button

@@ -305,13 +305,31 @@ export default function CustomerPage() {
       <div className="portal-container">
         {/* Header */}
         <div className="card-header">
-          <div className="brand-row">
-            <div className="brand-icon-box">
-              <Printer size={18} strokeWidth={2.4} />
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', marginBottom: 12 }}>
+            <div className="brand-row" style={{ margin: 0 }}>
+              <div className="brand-icon-box">
+                <Printer size={18} strokeWidth={2.4} />
+              </div>
+              <h1 className="brand-title">{settings.shopName || 'PrintShop'}</h1>
             </div>
-            <h1 className="brand-title">PrintShop</h1>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <a
+                href="/landing"
+                className="btn-mini"
+                style={{ fontSize: 11.5, padding: '4px 10px', textDecoration: 'none' }}
+              >
+                About &amp; Setup
+              </a>
+              <a
+                href="/admin"
+                className="btn-mini"
+                style={{ fontSize: 11.5, padding: '4px 10px', textDecoration: 'none' }}
+              >
+                Store Admin
+              </a>
+            </div>
           </div>
-          <p className="subtitle">Instant Automated Document Printing</p>
+          <p className="subtitle">Instant Automated Document Printing &middot; Self-Service Terminal</p>
         </div>
 
         {/* Elegant Steps Bar */}
@@ -683,8 +701,24 @@ export default function CustomerPage() {
       </div>
 
       {/* Footer Info */}
-      <div className="text-muted" style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, marginTop: 24 }}>
-        <Sparkles size={13} strokeWidth={2.2} /> Automated Print System
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, fontSize: 12, marginTop: 28, color: 'var(--text-secondary)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+          <a href="/landing" style={{ textDecoration: 'underline' }}>Product Overview</a>
+          <span>&middot;</span>
+          <a href="/admin" style={{ textDecoration: 'underline' }}>Admin Dashboard</a>
+          <span>&middot;</span>
+          <a
+            href="https://www.ruthwikreddy.live/"
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{ fontWeight: 600, color: 'var(--text-primary)' }}
+          >
+            Built by Ruthwik Reddy &nearr;
+          </a>
+        </div>
+        <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+          Printr Cloud &middot; Autonomous Xerox &amp; Print Automation System
+        </div>
       </div>
 
       {/* Toast */}
