@@ -197,7 +197,8 @@ export default function AdminDashboard() {
     setTimeout(() => setCopiedCmd(null), 2000);
   };
 
-  const kioskUrl = originUrl || 'https://your-shop-domain.com';
+  const hubUrl = originUrl || 'https://printr.ruthwikreddy.live';
+  const kioskUrl = `${hubUrl}/app`;
   const standeeQrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=350x350&margin=15&data=${encodeURIComponent(
     kioskUrl
   )}`;
@@ -207,9 +208,9 @@ export default function AdminDashboard() {
       {/* Top Navigation */}
       <header className="admin-header">
         <div className="admin-brand">
-          <div className="admin-logo-badge">
+          <Link href="/" className="admin-logo-badge" title="Go to Home">
             <Printer size={18} strokeWidth={2.5} />
-          </div>
+          </Link>
           <div className="admin-title-group">
             <span className="admin-title">{shopName}</span>
             <span className="admin-subtitle">Shop Owner Control Center</span>
@@ -231,9 +232,9 @@ export default function AdminDashboard() {
             </span>
           </div>
 
-          <Link href="/" target="_blank" className="btn-customer-portal">
+          <Link href="/app" target="_blank" className="btn-customer-portal">
             <ExternalLink size={14} />
-            <span>Open Customer Kiosk</span>
+            <span>Open Customer Kiosk (/app)</span>
           </Link>
         </div>
       </header>
@@ -786,13 +787,13 @@ export default function AdminDashboard() {
                 </p>
                 <div className="cmd-box">
                   <code>
-                    set BACKEND_URL={kioskUrl} &amp;&amp; node print-agent\agent.js
+                    set BACKEND_URL={hubUrl} &amp;&amp; node print-agent\agent.js
                   </code>
                   <button
                     className="btn-copy-code"
                     onClick={() =>
                       copyToClipboard(
-                        `set BACKEND_URL=${kioskUrl} && node print-agent\\agent.js`,
+                        `set BACKEND_URL=${hubUrl} && node print-agent\\agent.js`,
                         'win'
                       )
                     }
@@ -814,13 +815,13 @@ export default function AdminDashboard() {
                 <p className="platform-desc">Run directly via Terminal:</p>
                 <div className="cmd-box">
                   <code>
-                    BACKEND_URL="{kioskUrl}" node print-agent/agent.js
+                    BACKEND_URL="{hubUrl}" node print-agent/agent.js
                   </code>
                   <button
                     className="btn-copy-code"
                     onClick={() =>
                       copyToClipboard(
-                        `BACKEND_URL="${kioskUrl}" node print-agent/agent.js`,
+                        `BACKEND_URL="${hubUrl}" node print-agent/agent.js`,
                         'mac'
                       )
                     }

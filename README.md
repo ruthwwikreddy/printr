@@ -15,9 +15,10 @@ Turn any conventional Xerox center, university print hub, or office into a **100
 ---
 
 ## ⚡ Live Demo
-- **Customer Kiosk**: [https://printr.ruthwikreddy.live/](https://printr.ruthwikreddy.live/)
+- **Product Overview & Architecture Showcase**: [https://printr.ruthwikreddy.live/](https://printr.ruthwikreddy.live/)
+- **Customer Self-Service Kiosk**: [https://printr.ruthwikreddy.live/app](https://printr.ruthwikreddy.live/app)
 - **Shop Owner Admin Panel**: [https://printr.ruthwikreddy.live/admin](https://printr.ruthwikreddy.live/admin)
-- **Product & Architecture Showcase**: [https://printr.ruthwikreddy.live/landing](https://printr.ruthwikreddy.live/landing)
+- **Creator Portfolio**: [https://www.ruthwikreddy.live/](https://www.ruthwikreddy.live/)
 
 ---
 
