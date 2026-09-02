@@ -28,6 +28,7 @@ import {
   RefreshCw,
   Copy,
   ExternalLink,
+  Zap,
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -394,26 +395,42 @@ export default function CustomerKioskApp() {
       <header className="terminal-header">
         <div className="header-inner">
           <div className="header-brand">
-            <Link href="/" className="brand-logo-badge" title="Go to Home">
-              <Printer size={20} strokeWidth={2.5} />
-            </Link>
+            <div className="brand-logo-badge" title="Printr Self-Service Kiosk">
+              <Printer size={22} strokeWidth={2.4} />
+              <span className="brand-logo-glow"></span>
+            </div>
             <div className="brand-titles">
-              <h1 className="brand-main-title">{shop.shopName}</h1>
-              <span className="brand-sub-title">
-                {shop.tagline || 'Automated Self-Service Printing Kiosk'}
-              </span>
+              <div className="brand-title-wrap">
+                <h1 className="brand-main-title">{shop.shopName}</h1>
+                <span className="brand-station-pill">
+                  <Zap size={10} strokeWidth={3} />
+                  <span>Auto-Kiosk</span>
+                </span>
+              </div>
+              <div className="brand-sub-wrap">
+                <span className="brand-sub-title">
+                  {shop.tagline || 'Autonomous Self-Service Printing Station'}
+                </span>
+                {shop.address && (
+                  <>
+                    <span className="sub-dot">·</span>
+                    <span className="brand-address-text">
+                      <MapPin size={11} className="inline mr-1" />
+                      {shop.address}
+                    </span>
+                  </>
+                )}
+              </div>
             </div>
           </div>
 
           <div className="header-actions">
-            <div className="status-pill-live">
-              <span className="live-dot pulse"></span>
+            <div className="status-pill-live" title="Hardware Agent Connected & Ready to Print">
+              <span className="live-dot-ring">
+                <span className="live-dot-core"></span>
+              </span>
               <span className="live-text">Printer Online</span>
             </div>
-            <Link href="/admin" className="header-admin-link">
-              <Store size={14} />
-              <span>Shop Admin</span>
-            </Link>
           </div>
         </div>
       </header>
@@ -937,18 +954,6 @@ export default function CustomerKioskApp() {
         )}
       </main>
 
-      {/* Footer */}
-      <footer className="terminal-footer">
-        <div className="footer-inner">
-          <Link href="/" style={{ color: 'inherit', textDecoration: 'underline' }}>
-            Printr Home
-          </Link>
-          <span>·</span>
-          <span>Powered by <strong>Printr Open-Source Autonomous OS</strong></span>
-          <span>·</span>
-          <Link href="/admin">Shop Control Center</Link>
-        </div>
-      </footer>
     </div>
   );
 }

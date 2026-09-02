@@ -94,6 +94,7 @@ export default function AdminDashboard() {
 
   const [savingSettings, setSavingSettings] = useState(false);
   const [savedSuccess, setSavedSuccess] = useState(false);
+  const [saveError, setSaveError] = useState('');
   const [copiedToken, setCopiedToken] = useState(false);
   const [copiedCmd, setCopiedCmd] = useState<string | null>(null);
   const [originUrl, setOriginUrl] = useState('');
@@ -163,10 +164,14 @@ export default function AdminDashboard() {
 
       if (res.ok) {
         setSavedSuccess(true);
+        setSaveError('');
         setTimeout(() => setSavedSuccess(false), 3000);
+      } else {
+        const err = await res.json().catch(() => ({}));
+        setSaveError(err.error || 'Failed to save settings. Check UPI ID and try again.');
       }
     } catch (err) {
-      alert('Failed to save settings');
+      setSaveError('Network error — could not reach server.');
     } finally {
       setSavingSettings(false);
     }
@@ -198,48 +203,80 @@ export default function AdminDashboard() {
   };
 
   const hubUrl = originUrl || 'https://printr.ruthwikreddy.live';
-  const kioskUrl = hubUrl;
+  const kioskUrl = `${hubUrl}/app`;
   const standeeQrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=350x350&margin=15&data=${encodeURIComponent(
     kioskUrl
   )}`;
-
   return (
     <div className="admin-container">
-      {/* Top Navigation */}
+      {/* ── Top Navigation ────────────────────────────────── */}
       <header className="admin-header">
-        <div className="admin-brand">
-          <Link href="/" className="admin-logo-badge" title="Go to Kiosk">
-            <Printer size={18} strokeWidth={2.5} />
-          </Link>
-          <div className="admin-title-group">
-            <span className="admin-title">{shopName}</span>
-            <span className="admin-subtitle">Shop Owner Control Center</span>
-          </div>
-        </div>
+        <div className="admin-header-inner">
 
-        <div className="admin-header-right">
-          {/* Agent Status Live Indicator */}
-          <div
-            className={`admin-status-badge ${
-              stats?.isOnline ? 'status-online' : 'status-offline'
-            }`}
-          >
-            <span className="dot pulse"></span>
-            <span>
-              {stats?.isOnline
-                ? `Agent Online (${stats.agentName})`
-                : 'Agent Offline (Start Daemon)'}
-            </span>
+          {/* Brand */}
+          <div className="admin-brand">
+            <div className="admin-logo-badge">
+              <Printer size={20} strokeWidth={2.4} />
+            </div>
+            <div className="admin-title-group">
+              <div className="admin-title-wrap">
+                <span className="admin-title">{shopName}</span>
+                <span className="admin-badge-pill">Admin</span>
+              </div>
+              <span className="admin-subtitle">Shop Owner Control Center</span>
+            </div>
           </div>
 
-          <Link href="/" target="_blank" className="btn-customer-portal">
-            <ExternalLink size={14} />
-            <span>Open Customer Kiosk</span>
-          </Link>
+          {/* Right Actions */}
+          <div className="admin-header-right">
+
+            {/* Agent Status */}
+            <div
+              className={`admin-status-badge ${
+                stats?.isOnline ? 'status-online' : 'status-offline'
+              }`}
+              title={
+                stats?.isOnline
+                  ? `Print agent is active · ${stats.agentName}`
+                  : 'Agent offline — start the daemon on your counter PC'
+              }
+            >
+              <span className="dot-ring-wrap">
+                <span className="dot-core"></span>
+              </span>
+              <span className="status-label">
+                {stats?.isOnline ? (
+                  <>
+                    <strong>Agent Online</strong>
+                    {stats.agentName && (
+                      <span className="agent-tag-name">· {stats.agentName}</span>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <strong>Agent Offline</strong>
+                    <span className="agent-sub-hint">— Start Daemon</span>
+                  </>
+                )}
+              </span>
+            </div>
+
+            {/* Open Kiosk Button */}
+            <Link
+              href="/app"
+              target="_blank"
+              className="btn-customer-portal"
+              title="Open Customer Self-Service Kiosk in new tab"
+            >
+              <ExternalLink size={13} strokeWidth={2.5} />
+              <span>Open Customer Kiosk</span>
+            </Link>
+
+          </div>
         </div>
       </header>
 
-      {/* Main Navigation Tabs */}
+      {/* ── Tab Navigation ────────────────────────────────── */}
       <nav className="admin-nav-tabs">
         <button
           type="button"
@@ -255,7 +292,10 @@ export default function AdminDashboard() {
           onClick={() => setTab('orders')}
         >
           <ListOrdered size={15} />
-          <span>Print Orders Queue ({orders.length})</span>
+          <span>Print Queue</span>
+          {orders.length > 0 && (
+            <span className="tab-count-badge">{orders.length}</span>
+          )}
         </button>
         <button
           type="button"
@@ -263,7 +303,7 @@ export default function AdminDashboard() {
           onClick={() => setTab('pricing')}
         >
           <Banknote size={15} />
-          <span>Rates &amp; Direct UPI</span>
+          <span>Rates &amp; UPI</span>
         </button>
         <button
           type="button"
@@ -271,7 +311,7 @@ export default function AdminDashboard() {
           onClick={() => setTab('agent')}
         >
           <Terminal size={15} />
-          <span>Connect Counter PC</span>
+          <span>Counter PC Setup</span>
         </button>
         <button
           type="button"
@@ -279,7 +319,7 @@ export default function AdminDashboard() {
           onClick={() => setTab('standee')}
         >
           <QrCode size={15} />
-          <span>Counter QR Standee</span>
+          <span>QR Standee</span>
         </button>
       </nav>
 
@@ -756,8 +796,15 @@ export default function AdminDashboard() {
                   </>
                 )}
               </button>
+              {saveError && (
+                <p style={{ color: '#be123c', fontSize: 13, marginTop: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <AlertTriangle size={14} />
+                  {saveError}
+                </p>
+              )}
             </div>
           </form>
+
         </div>
       )}
 
