@@ -1,4 +1,4 @@
-import { db } from './firebase';
+import { db, firebaseEnabled } from './firebase';
 import {
   collection,
   doc,
@@ -51,6 +51,25 @@ const ORDERS_COLLECTION = 'orders';
 const SETTINGS_COLLECTION = 'config';
 const SETTINGS_DOC = 'shop_settings';
 
+// Firestore writes wait for a server ack and never settle while the client is offline,
+// so every call is bounded to keep it off the request critical path.
+const FIRESTORE_TIMEOUT_MS = 2500;
+
+function withTimeout<T>(operation: Promise<T>, fallback: T): Promise<T> {
+  return new Promise<T>((resolve) => {
+    const timer = setTimeout(() => resolve(fallback), FIRESTORE_TIMEOUT_MS);
+    operation
+      .then((value) => resolve(value))
+      .catch((err) => {
+        console.error('Firestore operation failed:', err);
+        resolve(fallback);
+      })
+      .finally(() => clearTimeout(timer));
+  });
+}
+
+const noop = () => undefined;
+
 export const DEFAULT_SHOP_SETTINGS: ShopSettings = {
   shopName: 'Quick Print Xerox & Digital Prints',
   upiId: 'shopowner@upi',
@@ -65,18 +84,32 @@ export const DEFAULT_SHOP_SETTINGS: ShopSettings = {
   },
 };
 
+
+// [TEMP TEST GUARD] local settings persistence used when Firestore is disabled
+async function readLocalSettings(): Promise<ShopSettings> {
+  try {
+    const fs = await import('fs/promises');
+    const raw = await fs.readFile(process.cwd() + '/local_shop_settings.json', 'utf-8');
+    return { ...DEFAULT_SHOP_SETTINGS, ...JSON.parse(raw) } as ShopSettings;
+  } catch {
+    return DEFAULT_SHOP_SETTINGS;
+  }
+}
+
+async function writeLocalSettings(s: ShopSettings) {
+  try {
+    const fs = await import('fs/promises');
+    await fs.writeFile(process.cwd() + '/local_shop_settings.json', JSON.stringify(s, null, 2));
+  } catch {}
+}
+
 /**
  * Save / sync an order to Cloud Firestore
  */
 export async function syncOrderToFirestore(orderData: FirestoreOrder): Promise<boolean> {
-  try {
-    const orderRef = doc(db, ORDERS_COLLECTION, orderData.id);
-    await setDoc(orderRef, orderData, { merge: true });
-    return true;
-  } catch (err) {
-    console.error('Firestore syncOrder error:', err);
-    return false;
-  }
+  if (!firebaseEnabled) return false;
+  const orderRef = doc(db, ORDERS_COLLECTION, orderData.id);
+  return withTimeout(setDoc(orderRef, orderData, { merge: true }).then(() => true), false);
 }
 
 /**
@@ -86,17 +119,12 @@ export async function updateFirestoreOrderStatus(
   orderId: string,
   updates: Partial<FirestoreOrder>
 ): Promise<boolean> {
-  try {
-    const orderRef = doc(db, ORDERS_COLLECTION, orderId);
-    await updateDoc(orderRef, {
-      ...updates,
-      updatedAt: new Date().toISOString(),
-    });
-    return true;
-  } catch (err) {
-    console.error('Firestore updateStatus error:', err);
-    return false;
-  }
+  if (!firebaseEnabled) return false;
+  const orderRef = doc(db, ORDERS_COLLECTION, orderId);
+  return withTimeout(
+    updateDoc(orderRef, { ...updates, updatedAt: new Date().toISOString() }).then(() => true),
+    false
+  );
 }
 
 /**
@@ -106,6 +134,7 @@ export function subscribeToFirestoreOrder(
   orderId: string,
   callback: (order: FirestoreOrder | null) => void
 ) {
+  if (!firebaseEnabled) return noop;
   const orderRef = doc(db, ORDERS_COLLECTION, orderId);
   return onSnapshot(
     orderRef,
@@ -128,6 +157,7 @@ export function subscribeToFirestoreOrder(
 export function subscribeToShopOrders(
   callback: (orders: FirestoreOrder[]) => void
 ) {
+  if (!firebaseEnabled) return noop;
   const ordersQuery = query(
     collection(db, ORDERS_COLLECTION),
     orderBy('createdAt', 'desc'),
@@ -161,16 +191,15 @@ export function subscribeToShopOrders(
  * Get Shop Settings from Cloud Firestore or return defaults
  */
 export async function getShopSettings(): Promise<ShopSettings> {
-  try {
-    const ref = doc(db, SETTINGS_COLLECTION, SETTINGS_DOC);
-    const snap = await getDoc(ref);
-    if (snap.exists()) {
-      return { ...DEFAULT_SHOP_SETTINGS, ...snap.data() } as ShopSettings;
-    }
-  } catch (err) {
-    console.warn('Could not read shop settings from Firestore:', err);
-  }
-  return DEFAULT_SHOP_SETTINGS;
+  if (!firebaseEnabled) return DEFAULT_SHOP_SETTINGS;
+  const ref = doc(db, SETTINGS_COLLECTION, SETTINGS_DOC);
+  const settings = await withTimeout(
+    getDoc(ref).then((snap) =>
+      snap.exists() ? ({ ...DEFAULT_SHOP_SETTINGS, ...snap.data() } as ShopSettings) : null
+    ),
+    null
+  );
+  return settings ?? DEFAULT_SHOP_SETTINGS;
 }
 
 /**
@@ -182,11 +211,9 @@ export async function saveShopSettings(settings: Partial<ShopSettings>): Promise
     ...settings,
     updatedAt: new Date().toISOString(),
   };
-  try {
+  if (firebaseEnabled) {
     const ref = doc(db, SETTINGS_COLLECTION, SETTINGS_DOC);
-    await setDoc(ref, merged, { merge: true });
-  } catch (err) {
-    console.error('Failed to write shop settings to Firestore:', err);
+    await withTimeout(setDoc(ref, merged, { merge: true }).then(() => true), false);
   }
   return merged;
 }

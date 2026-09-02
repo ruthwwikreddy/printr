@@ -13,6 +13,9 @@ const firebaseConfig = {
   measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID || '',
 };
 
+// Cloud sync is optional: without a project id the app runs on the flat-file DB alone.
+export const firebaseEnabled = Boolean(firebaseConfig.projectId && firebaseConfig.apiKey);
+
 // Initialize Firebase (SSR-safe singleton)
 const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 const db = getFirestore(app);

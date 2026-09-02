@@ -111,6 +111,31 @@ BACKEND_URL="http://localhost:3000" node print-agent/agent.js
 
 Upload a document at `/app`, tap **I've paid**, and it prints on your default printer.
 
+Nothing else is required: with no Firebase variables set, Printr stores orders in `mock_db.json`
+and the kiosk polls `/api/orders/[id]/status` for live status.
+
+### Expose a local hub temporarily (ngrok)
+
+Handy for testing the QR standee on a phone, or for running a pop-up counter off a laptop without
+deploying anything:
+
+```bash
+npm run dev                       # terminal 1 — hub on :3000
+ngrok http 3000                   # terminal 2 — prints https://<id>.ngrok-free.app
+```
+
+Then:
+
+- Customers scan a QR pointing at `https://<id>.ngrok-free.app/app`.
+- In `/admin` → **QR Standee**, set the hub URL to the ngrok URL before printing the standee.
+- Point the counter agent at the same URL:
+  `BACKEND_URL="https://<id>.ngrok-free.app" node print-agent/agent.js`
+  (the agent can also keep using `http://localhost:3000` when it runs on the same machine).
+- Because `/` is host-aware, the ngrok host shows the kiosk — not the marketing page.
+
+The URL changes every time you restart ngrok on the free plan, so reprint the standee or use a
+reserved domain (`ngrok http --domain=myshop.ngrok.app 3000`) for anything longer-lived.
+
 ## 6. Environment variables
 
 Create `.env.local` in the project root (never commit it):
@@ -156,6 +181,10 @@ On the counter PC the agent reads `BACKEND_URL`, `PRINT_AGENT_AUTH_SECRET` and o
 
 Printr runs completely without Firebase (flat-file storage + 2.5 s polling). Adding it gives you
 instant status updates and settings that survive serverless restarts.
+
+Cloud sync is skipped entirely unless `NEXT_PUBLIC_FIREBASE_PROJECT_ID` and
+`NEXT_PUBLIC_FIREBASE_API_KEY` are set, and every Firestore call is bounded by a 2.5 s timeout, so a
+misconfigured or unreachable project can never slow down or block an order.
 
 1. Create a project at <https://console.firebase.google.com>.
 2. **Build → Firestore Database → Create database** (production mode is fine).
