@@ -1,6 +1,12 @@
 import { NextResponse } from 'next/server';
 import { getShopSettings, saveShopSettings, DEFAULT_SHOP_SETTINGS } from '@/lib/firestoreService';
 
+import { isAuthenticated } from '@/lib/adminAuth';
+
+function unauthorized() {
+  return NextResponse.json({ error: 'Admin authentication required' }, { status: 401 });
+}
+
 export async function GET() {
   try {
     const settings = await getShopSettings();
@@ -14,6 +20,8 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  if (!isAuthenticated()) return unauthorized();
+
   try {
     const body = await request.json();
     const { upiId, shopName, phone, address, tagline, pricing } = body;

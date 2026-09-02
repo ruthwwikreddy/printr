@@ -1,7 +1,15 @@
 import { NextResponse } from 'next/server';
-import prisma from '@/lib/db';
+import db from '@/lib/db';
+
+import { isAuthenticated } from '@/lib/adminAuth';
+
+function unauthorized() {
+  return NextResponse.json({ error: 'Admin authentication required' }, { status: 401 });
+}
 
 export async function POST(request: Request) {
+  if (!isAuthenticated()) return unauthorized();
+
   try {
     const { paperSize, colourMode, pricePerPage } = await request.json();
 
@@ -9,7 +17,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Missing pricing fields' }, { status: 400 });
     }
 
-    const rule = await prisma.pricingRule.upsert({
+    const rule = await db.pricingRule.upsert({
       where: { id: `${paperSize}_${colourMode}` },
       update: { pricePerPage: parseFloat(pricePerPage) },
       create: {

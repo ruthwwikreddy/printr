@@ -1,7 +1,15 @@
 import { NextResponse } from 'next/server';
 import db from '@/lib/db';
 
+import { isAuthenticated } from '@/lib/adminAuth';
+
+function unauthorized() {
+  return NextResponse.json({ error: 'Admin authentication required' }, { status: 401 });
+}
+
 export async function POST(request: Request) {
+  if (!isAuthenticated()) return unauthorized();
+
   try {
     const { jobId } = await request.json();
 

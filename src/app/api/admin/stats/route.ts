@@ -1,7 +1,15 @@
 import { NextResponse } from 'next/server';
 import db from '@/lib/db';
 
+import { isAuthenticated } from '@/lib/adminAuth';
+
+function unauthorized() {
+  return NextResponse.json({ error: 'Admin authentication required' }, { status: 401 });
+}
+
 export async function GET() {
+  if (!isAuthenticated()) return unauthorized();
+
   try {
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
@@ -14,7 +22,10 @@ export async function GET() {
         db.printJob.count({ where: { status: 'PROCESSING' } }),
         db.printJob.count({ where: { status: 'COMPLETED' } }),
         db.printJob.count({ where: { status: 'FAILED' } }),
-        db.order.aggregate({ where: { status: 'COMPLETED' }, _sum: { totalAmount: true } }),
+        db.order.aggregate({
+          where: { status: { in: ['PAID', 'PRINTING', 'COMPLETED'] } },
+          _sum: { totalAmount: true },
+        }),
         db.order.findMany({ take: 20, orderBy: { createdAt: 'desc' } }),
       ]);
 

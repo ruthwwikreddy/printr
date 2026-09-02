@@ -19,6 +19,10 @@ export const metadata: Metadata = {
     'UPI QR Print automation',
     'Wireless automated printing',
     'Next.js printer agent',
+    'Ruthwik Reddy',
+    'Ruthwik Reddy Printr',
+    'open source print shop software India',
+    'self hosted printing platform',
   ],
   authors: [
     {
@@ -32,6 +36,9 @@ export const metadata: Metadata = {
     index: true,
     follow: true,
   },
+  alternates: {
+    canonical: '/',
+  },
   openGraph: {
     type: 'website',
     locale: 'en_US',
@@ -40,6 +47,12 @@ export const metadata: Metadata = {
     description:
       'Turn any conventional Xerox or print shop into an automated 24/7 self-service station. 100% open source.',
     siteName: 'Printr Open Source',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Printr — Open-Source Autonomous Printing OS',
+    description:
+      'Self-hosted printing OS by Ruthwik Reddy: QR kiosk, direct UPI payments, and automatic printer dispatch. MIT licensed.',
   },
 };
 
@@ -51,19 +64,59 @@ export const viewport: Viewport = {
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
+  const siteUrl = 'https://printr.ruthwikreddy.live';
+  const author = {
+    '@type': 'Person',
+    '@id': 'https://www.ruthwikreddy.live/#person',
+    name: 'Ruthwik Reddy',
+    url: 'https://www.ruthwikreddy.live/',
+    jobTitle: 'Software Engineer',
+    sameAs: ['https://www.ruthwikreddy.live/', 'https://github.com/ruthwwikreddy'],
+  };
+
   const jsonLd = {
     '@context': 'https://schema.org',
-    '@type': 'SoftwareApplication',
-    name: 'Printr',
-    applicationCategory: 'BusinessApplication',
-    operatingSystem: 'Cross-platform (Windows, macOS, Linux, Web)',
-    description:
-      'Autonomous open-source printing OS and customer self-service kiosk system for Xerox and print shops.',
-    offers: {
-      '@type': 'Offer',
-      price: '0.00',
-      priceCurrency: 'INR',
-    },
+    '@graph': [
+      author,
+      {
+        '@type': 'WebSite',
+        '@id': `${siteUrl}/#website`,
+        url: siteUrl,
+        name: 'Printr',
+        description:
+          'Open-source autonomous printing OS for Xerox and print shops, created by Ruthwik Reddy.',
+        inLanguage: 'en',
+        publisher: { '@id': author['@id'] },
+      },
+      {
+        '@type': 'SoftwareApplication',
+        '@id': `${siteUrl}/#software`,
+        name: 'Printr',
+        applicationCategory: 'BusinessApplication',
+        operatingSystem: 'Cross-platform (Windows, macOS, Linux, Web)',
+        url: siteUrl,
+        downloadUrl: 'https://github.com/ruthwwikreddy/printr',
+        codeRepository: 'https://github.com/ruthwwikreddy/printr',
+        license: 'https://opensource.org/licenses/MIT',
+        isAccessibleForFree: true,
+        author,
+        creator: author,
+        description:
+          'Autonomous open-source printing OS and customer self-service kiosk system for Xerox and print shops: QR upload, direct UPI payment, and automatic dispatch to the counter printer.',
+        featureList: [
+          'QR-code self-service print kiosk',
+          'Direct UPI payments with zero platform fee',
+          'Cross-platform native print agent',
+          'Real-time print job status',
+          'Shop owner admin control center',
+        ],
+        offers: {
+          '@type': 'Offer',
+          price: '0.00',
+          priceCurrency: 'INR',
+        },
+      },
+    ],
   };
 
   return (
