@@ -198,7 +198,7 @@ export default function AdminDashboard() {
   };
 
   const hubUrl = originUrl || 'https://printr.ruthwikreddy.live';
-  const kioskUrl = `${hubUrl}/app`;
+  const kioskUrl = hubUrl;
   const standeeQrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=350x350&margin=15&data=${encodeURIComponent(
     kioskUrl
   )}`;
@@ -208,7 +208,7 @@ export default function AdminDashboard() {
       {/* Top Navigation */}
       <header className="admin-header">
         <div className="admin-brand">
-          <Link href="/" className="admin-logo-badge" title="Go to Home">
+          <Link href="/" className="admin-logo-badge" title="Go to Kiosk">
             <Printer size={18} strokeWidth={2.5} />
           </Link>
           <div className="admin-title-group">
@@ -232,9 +232,9 @@ export default function AdminDashboard() {
             </span>
           </div>
 
-          <Link href="/app" target="_blank" className="btn-customer-portal">
+          <Link href="/" target="_blank" className="btn-customer-portal">
             <ExternalLink size={14} />
-            <span>Open Customer Kiosk (/app)</span>
+            <span>Open Customer Kiosk</span>
           </Link>
         </div>
       </header>
