@@ -30,6 +30,11 @@ function uuid() {
   return Math.random().toString(36).slice(2) + Date.now().toString(36);
 }
 
+function matchesStatus(value: string, filter: any) {
+  if (filter && Array.isArray(filter.in)) return filter.in.includes(value);
+  return value === filter;
+}
+
 export const db = {
   order: {
     async create({ data }: any) {
@@ -53,9 +58,6 @@ export const db = {
         updatedAt: new Date().toISOString(),
       };
 
-      if (fileRecord) { fileRecord.orderId = newOrder.id; db.orders.push({ ...newOrder }); }
-      db.orders.push(newOrder);
-
       if (fileRecord) {
         fileRecord.orderId = newOrder.id;
         // Store files inline in order
@@ -67,10 +69,7 @@ export const db = {
         newOrder.printJobs = [jobRecord];
       }
 
-      // Replace last pushed order (we pushed twice above by mistake) - clean push
-      db.orders = db.orders.filter((o) => o.id !== newOrder.id);
       db.orders.push(newOrder);
-
       await writeDb(db);
       return newOrder;
     },
@@ -115,7 +114,7 @@ export const db = {
         return db.orders.filter((o: any) => new Date(o.createdAt).getTime() >= threshold).length;
       }
       if (where?.status) {
-        return db.orders.filter((o: any) => o.status === where.status).length;
+        return db.orders.filter((o: any) => matchesStatus(o.status, where.status)).length;
       }
       return db.orders.length;
     },
@@ -123,7 +122,7 @@ export const db = {
     async aggregate({ where, _sum }: any) {
       const db = await readDb();
       let res = [...db.orders];
-      if (where?.status) res = res.filter((o: any) => o.status === where.status);
+      if (where?.status) res = res.filter((o: any) => matchesStatus(o.status, where.status));
       const totalAmount = res.reduce((sum: number, o: any) => sum + Number(o.totalAmount || 0), 0);
       return { _sum: { totalAmount } };
     },

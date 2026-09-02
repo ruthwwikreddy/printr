@@ -1,51 +1,49 @@
-'use client';
+import type { Metadata } from 'next';
+import { headers } from 'next/headers';
+import CustomerKiosk from '@/components/CustomerKiosk';
+import LandingPage from '@/components/LandingPage';
 
-import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+export const dynamic = 'force-dynamic';
 
 /**
- * Root route — redirects to the customer self-service kiosk at /app.
+ * Root route.
  *
- * Open-source note:
- * This file is intentionally minimal. The repository ships only:
- *   /app   — Customer self-service kiosk
- *   /admin — Shop owner control center
+ * On the official project site (printr.ruthwikreddy.live) the root serves the
+ * open-source showcase. Every other deployment is a print shop, so the root
+ * serves the customer kiosk directly — a scanned counter QR should never land
+ * on marketing copy.
  *
- * If you want a custom landing page, replace the contents of this file.
+ * Override the showcase hosts with NEXT_PUBLIC_LANDING_HOSTS (comma separated).
  */
-export default function RootRedirect() {
-  const router = useRouter();
+const LANDING_HOSTS = (process.env.NEXT_PUBLIC_LANDING_HOSTS || 'printr.ruthwikreddy.live')
+  .split(',')
+  .map((h) => h.trim().toLowerCase())
+  .filter(Boolean);
 
-  useEffect(() => {
-    router.replace('/app');
-  }, [router]);
+function isShowcaseHost() {
+  const host = (headers().get('host') || '').toLowerCase().split(':')[0].replace(/^www\./, '');
+  return LANDING_HOSTS.includes(host);
+}
 
-  return (
-    <div
-      style={{
-        minHeight: '100vh',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        background: '#fafafa',
-        fontFamily: 'system-ui, sans-serif',
-      }}
-    >
-      <div style={{ textAlign: 'center', color: '#71717a' }}>
-        <div
-          style={{
-            width: 40,
-            height: 40,
-            border: '2px solid #e4e4e7',
-            borderTopColor: '#000',
-            borderRadius: '50%',
-            animation: 'spin 0.8s linear infinite',
-            margin: '0 auto 12px',
-          }}
-        />
-        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-        <p style={{ fontSize: 14, margin: 0 }}>Redirecting to kiosk…</p>
-      </div>
-    </div>
-  );
+export function generateMetadata(): Metadata {
+  if (isShowcaseHost()) {
+    return {
+      title:
+        'Printr — Open-Source Autonomous Printing OS for Xerox & Print Shops by Ruthwik Reddy',
+      description:
+        'Printr is a free, MIT-licensed, self-hosted printing OS by Ruthwik Reddy. Customers scan a counter QR, upload PDFs, pay with a dynamic UPI QR, and the shop printer dispatches the job automatically on Windows, macOS and Linux.',
+      alternates: { canonical: '/' },
+    };
+  }
+
+  return {
+    title: 'Self-Service Print Kiosk — Upload, Pay by UPI, Collect',
+    description:
+      'Upload a PDF, JPG or PNG, choose copies, colour, A4/A3 and duplex, pay with a UPI QR code, and collect your prints from the counter.',
+    alternates: { canonical: '/' },
+  };
+}
+
+export default function RootPage() {
+  return isShowcaseHost() ? <LandingPage /> : <CustomerKiosk />;
 }
