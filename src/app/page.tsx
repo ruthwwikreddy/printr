@@ -31,10 +31,14 @@ import {
   Flame,
   Activity,
   UploadCloud,
+  Menu,
+  X,
+  Star,
 } from 'lucide-react';
 
 export default function HomePage() {
   const [copiedCmd, setCopiedCmd] = useState<string | null>(null);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const copyCommand = (cmd: string, id: string) => {
     navigator.clipboard.writeText(cmd);
@@ -47,39 +51,120 @@ export default function HomePage() {
       {/* Navigation */}
       <nav className="landing-nav">
         <div className="landing-nav-inner">
-          <div className="landing-brand">
+          <Link href="/" className="landing-brand">
             <div className="brand-icon-box">
-              <Printer size={18} strokeWidth={2.4} />
+              <Printer size={19} strokeWidth={2.5} />
             </div>
             <div className="brand-text-col">
-              <span className="brand-name">Printr</span>
+              <div className="brand-title-row">
+                <span className="brand-name">Printr</span>
+                <span className="brand-version-badge">v1.0 · MIT</span>
+              </div>
               <span className="brand-tagline">Open-Source Autonomous Print OS</span>
             </div>
-          </div>
+          </Link>
 
+          {/* Desktop Links */}
           <div className="landing-nav-links">
-            <a href="#how-it-works">How It Works</a>
-            <a href="#features">Features</a>
-            <a href="#hardware">Hardware Agent</a>
-            <a href="#deploy">Deploy Guide</a>
-            <Link
-              href="/admin"
-              className="btn-mini-landing"
-              style={{
-                background: '#ffffff',
-                color: '#000000 !important',
-                border: '1px solid var(--border)',
-              }}
+            <a href="#how-it-works" className="nav-link-item">How It Works</a>
+            <a href="#features" className="nav-link-item">Features</a>
+            <a href="#hardware" className="nav-link-item">Hardware Agent</a>
+            <a href="#deploy" className="nav-link-item">Deploy Guide</a>
+            
+            <a
+              href="https://github.com/ruthwwikreddy/printr"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="nav-github-btn"
+              title="View on GitHub"
             >
+              <Github size={14} />
+              <span>GitHub</span>
+            </a>
+
+            <Link href="/admin" className="nav-admin-btn">
               <SlidersHorizontal size={13} />
               <span>Shop Admin</span>
             </Link>
-            <Link href="/app" className="btn-mini-landing">
+
+            <Link href="/app" className="nav-kiosk-btn">
               <span>Customer Kiosk</span>
               <ArrowRight size={13} strokeWidth={2.4} />
             </Link>
           </div>
+
+          {/* Mobile Menu Toggle Button */}
+          <button
+            type="button"
+            className="mobile-menu-toggle"
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            aria-label="Toggle navigation menu"
+          >
+            {mobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
+          </button>
         </div>
+
+        {/* Mobile Dropdown Menu */}
+        {mobileMenuOpen && (
+          <div className="mobile-nav-drawer">
+            <a
+              href="#how-it-works"
+              className="mobile-nav-link"
+              onClick={() => setMobileMenuOpen(false)}
+            >
+              How It Works
+            </a>
+            <a
+              href="#features"
+              className="mobile-nav-link"
+              onClick={() => setMobileMenuOpen(false)}
+            >
+              Features
+            </a>
+            <a
+              href="#hardware"
+              className="mobile-nav-link"
+              onClick={() => setMobileMenuOpen(false)}
+            >
+              Hardware Agent
+            </a>
+            <a
+              href="#deploy"
+              className="mobile-nav-link"
+              onClick={() => setMobileMenuOpen(false)}
+            >
+              Deploy Guide
+            </a>
+            <div className="mobile-nav-actions">
+              <a
+                href="https://github.com/ruthwwikreddy/printr"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mobile-btn-github"
+              >
+                <Github size={15} />
+                <span>GitHub Star</span>
+              </a>
+              <Link
+                href="/admin"
+                className="mobile-btn-admin"
+                onClick={() => setMobileMenuOpen(false)}
+              >
+                <SlidersHorizontal size={15} />
+                <span>Shop Control (/admin)</span>
+              </Link>
+              <Link
+                href="/app"
+                className="mobile-btn-kiosk"
+                onClick={() => setMobileMenuOpen(false)}
+              >
+                <Smartphone size={15} />
+                <span>Customer Kiosk (/app)</span>
+                <ArrowRight size={15} />
+              </Link>
+            </div>
+          </div>
+        )}
       </nav>
 
       {/* Hero Section */}
