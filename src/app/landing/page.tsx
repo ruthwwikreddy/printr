@@ -21,6 +21,10 @@ import {
   ChevronRight,
   Copy,
   Check,
+  Github,
+  Heart,
+  CreditCard,
+  Banknote,
 } from 'lucide-react';
 
 export default function LandingPage() {
@@ -28,7 +32,7 @@ export default function LandingPage() {
 
   const handleCopyCmd = () => {
     navigator.clipboard.writeText(
-      'git clone https://github.com/ruthwwikreddy/printr.git && cd printr && npm install && npm run agent'
+      'git clone https://github.com/ruthwwikreddy/printr.git && cd printr && npm install && npm run dev'
     );
     setCopiedCmd(true);
     setTimeout(() => setCopiedCmd(false), 2000);
@@ -45,20 +49,19 @@ export default function LandingPage() {
             </div>
             <div className="brand-text-col">
               <span className="brand-name">Printr</span>
-              <span className="brand-tagline">Cloud Print OS</span>
+              <span className="brand-tagline">Open-Source Print OS</span>
             </div>
           </div>
 
           <div className="landing-nav-links">
             <a href="#features">Features</a>
-            <a href="#how-it-works">How It Works</a>
-            <a href="#setup-guide">Shop Setup</a>
-            <a href="#author">Creator</a>
-            <Link href="/dashboard" className="btn-mini-landing" style={{ background: '#ffffff', color: '#000000 !important', border: '1px solid var(--border)' }}>
-              Shop Owner Login / Register
+            <a href="#architecture">Architecture</a>
+            <a href="#deploy">Deploy to Website</a>
+            <Link href="/admin" className="btn-mini-landing" style={{ background: '#ffffff', color: '#000000 !important', border: '1px solid var(--border)' }}>
+              Shop Admin Panel
             </Link>
             <Link href="/" className="btn-mini-landing">
-              Live Demo Kiosk <ArrowRight size={13} strokeWidth={2.4} />
+              Live Customer Kiosk <ArrowRight size={13} strokeWidth={2.4} />
             </Link>
           </div>
         </div>
@@ -68,33 +71,30 @@ export default function LandingPage() {
       <header className="landing-hero">
         <div className="landing-hero-badge">
           <Zap size={12} strokeWidth={2.8} />
-          <span>Next-Gen Autonomous Print Infrastructure for Xerox &amp; Print Centers</span>
+          <span>100% Free &amp; Open-Source for Print &amp; Xerox Shops Worldwide</span>
         </div>
         <h1 className="landing-hero-title">
           Turn Any Printer Into A<br />
-          <span>Self-Service Cloud Print Station</span>
+          <span>Self-Service Autonomous Print Station</span>
         </h1>
         <p className="landing-hero-desc">
-          Printr eliminates counter congestion. Customers upload files directly from their phone, customize pages, pay via dynamic UPI QR code, and your physical printers automatically dispatch the job in seconds with zero manual handling.
+          Printr eliminates long counter queues. Customers scan a QR code at your shop, upload documents, customize print settings, pay via dynamic UPI QR code, and your physical printers automatically dispatch the job in seconds on Windows, macOS, or Linux.
         </p>
 
         <div className="landing-cta-group">
-          <Link href="/dashboard" className="btn-landing-primary">
-            Register / Login Your Shop <ArrowRight size={16} strokeWidth={2.4} />
+          <Link href="/" className="btn-landing-primary">
+            Launch Customer Kiosk <ArrowRight size={16} strokeWidth={2.4} />
           </Link>
-          <Link href="/" className="btn-landing-secondary">
-            <Smartphone size={15} strokeWidth={2.4} /> Try Customer Terminal
-          </Link>
-          <Link href="/super-admin" className="btn-landing-secondary">
-            <ShieldCheck size={15} strokeWidth={2.4} /> Super Admin Dashboard
+          <Link href="/admin" className="btn-landing-secondary">
+            <SlidersHorizontal size={15} strokeWidth={2.4} /> Shop Owner Control Center
           </Link>
           <a
-            href="https://www.ruthwikreddy.live/"
+            href="https://github.com/ruthwwikreddy/printr"
             target="_blank"
             rel="noopener noreferrer"
             className="btn-landing-secondary"
           >
-            <Globe size={15} strokeWidth={2.4} /> Developed by Ruthwik Reddy
+            <Github size={15} strokeWidth={2.4} /> GitHub Repository
           </a>
         </div>
 
@@ -106,18 +106,18 @@ export default function LandingPage() {
               <span className="dot dot-2"></span>
               <span className="dot dot-3"></span>
             </div>
-            <div className="terminal-title">printr-agent — macOS / Linux / Windows daemon</div>
+            <div className="terminal-title">Universal Hardware Print Daemon — Windows / macOS / Linux</div>
             <button className="terminal-copy-btn" onClick={handleCopyCmd} title="Copy setup command">
               {copiedCmd ? <Check size={13} strokeWidth={2.5} /> : <Copy size={13} strokeWidth={2} />}
               <span>{copiedCmd ? 'Copied' : 'Copy'}</span>
             </button>
           </div>
           <div className="landing-terminal-body">
-            <p className="terminal-line"><span className="term-prompt">$</span> printr connect --backend https://printr.ruthwikreddy.live</p>
-            <p className="terminal-line text-muted">[2026-08-29 14:40:02] Connected to Printr Cloud Stream</p>
-            <p className="terminal-line text-muted">[2026-08-29 14:40:03] Detected Printers: HP_Deskjet_3540_series, Canon_LBP2900, Epson_L3150</p>
-            <p className="terminal-line text-highlight">[2026-08-29 14:40:15] ORDER #PRN-9402: Payment Verified (INR 12.00) via UPI</p>
-            <p className="terminal-line text-highlight">[2026-08-29 14:40:16] Dispatched 6 pages [A4 MONOCHROME DUPLEX] → HP_Deskjet_3540_series</p>
+            <p className="terminal-line"><span className="term-prompt">$</span> git clone https://github.com/ruthwwikreddy/printr.git &amp;&amp; cd printr</p>
+            <p className="terminal-line text-muted">[2026-09-02 10:30:00] Initializing Printr Universal Daemon...</p>
+            <p className="terminal-line text-muted">[2026-09-02 10:30:01] Detected Physical Printers: HP_DeskJet_3540, Canon_LBP2900, Epson_L3150</p>
+            <p className="terminal-line text-highlight">[2026-09-02 10:30:15] ORDER #PRN-9402: Payment Verified (INR 12.00) via UPI</p>
+            <p className="terminal-line text-highlight">[2026-09-02 10:30:16] Dispatched 6 pages [A4 MONOCHROME DUPLEX] → Canon_LBP2900</p>
             <p className="terminal-line text-success">✓ Print Job Completed. Ready for counter pickup.</p>
           </div>
         </div>
@@ -126,7 +126,7 @@ export default function LandingPage() {
       {/* Metrics Row */}
       <section className="landing-metrics-strip">
         <div className="metric-box">
-          <div className="metric-number">&lt; 3 sec</div>
+          <div className="metric-number">&lt; 2 sec</div>
           <div className="metric-label">Cloud-to-Printer Dispatch Latency</div>
         </div>
         <div className="metric-box">
@@ -135,201 +135,98 @@ export default function LandingPage() {
         </div>
         <div className="metric-box">
           <div className="metric-number">Direct UPI</div>
-          <div className="metric-label">0% Platform Fee · Money straight to shop</div>
+          <div className="metric-label">0% Platform Fee · Money straight to shop owner</div>
         </div>
         <div className="metric-box">
-          <div className="metric-number">Scalable</div>
-          <div className="metric-label">Deploy across 100+ branches simultaneously</div>
+          <div className="metric-number">Cross-Platform</div>
+          <div className="metric-label">Runs natively on Windows, macOS &amp; Linux</div>
         </div>
       </section>
 
       {/* Core Features */}
       <section id="features" className="landing-section">
-        <div className="section-badge">ENGINEERED FOR MULTI-SHOP SCALE</div>
-        <h2 className="section-heading">Everything a Modern Xerox &amp; Print Business Needs</h2>
+        <div className="section-badge">BUILT FOR EVERY PRINT SHOP</div>
+        <h2 className="section-heading">Everything You Need To Automate Your Shop</h2>
         <p className="section-subheading">
-          Built with an enterprise-grade stack so you can onboard dozens of franchise branches or campus printing spots with isolated configuration.
+          Stop manually taking pendrives, opening WhatsApp chats, and calculating page counts by hand.
         </p>
 
         <div className="features-grid">
           <div className="feature-card">
-            <div className="feature-icon">
+            <div className="feature-icon-box">
               <QrCode size={22} strokeWidth={2.4} />
             </div>
-            <h3 className="feature-title">Dynamic UPI QR Code</h3>
+            <h3 className="feature-title">QR Code Customer Kiosk</h3>
             <p className="feature-desc">
-              Every order generates an on-the-fly QR code containing your exact UPI ID and dynamic amount. Payments go directly into the store owner bank account without middlemen.
+              Customers scan your counter QR standee with their phone, upload documents, and customize print options instantly with zero app installation.
             </p>
           </div>
 
           <div className="feature-card">
-            <div className="feature-icon">
-              <Cpu size={22} strokeWidth={2.4} />
+            <div className="feature-icon-box">
+              <Banknote size={22} strokeWidth={2.4} />
             </div>
-            <h3 className="feature-title">Cross-Platform Background Agent</h3>
+            <h3 className="feature-title">Direct UPI Payments</h3>
             <p className="feature-desc">
-              Lightweight Node.js agent runs natively via CUPS / LP on macOS and Linux, and via Powershell on Windows. Auto-recovers on reboots with PM2.
+              Dynamic UPI QR code automatically calculates the exact bill based on your custom per-page rates. Funds go straight to your own UPI ID.
             </p>
           </div>
 
           <div className="feature-card">
-            <div className="feature-icon">
+            <div className="feature-icon-box">
+              <Terminal size={22} strokeWidth={2.4} />
+            </div>
+            <h3 className="feature-title">Universal Counter Agent</h3>
+            <p className="feature-desc">
+              Lightweight daemon runs on your counter PC (Windows, Mac, or Linux), listens for paid orders, and dispatches native print commands directly to your connected printer.
+            </p>
+          </div>
+
+          <div className="feature-card">
+            <div className="feature-icon-box">
               <SlidersHorizontal size={22} strokeWidth={2.4} />
             </div>
-            <h3 className="feature-title">Live Rate &amp; UPI Customization</h3>
+            <h3 className="feature-title">Shop Owner Control Center</h3>
             <p className="feature-desc">
-              Store managers can update A4/A3, Color, and Black &amp; White rates, shop name, and UPI ID on the fly from the admin panel without modifying any code.
-            </p>
-          </div>
-
-          <div className="feature-card">
-            <div className="feature-icon">
-              <Layers size={22} strokeWidth={2.4} />
-            </div>
-            <h3 className="feature-title">Auto PDF Page Detection</h3>
-            <p className="feature-desc">
-              Instant server-side PDF parsing extracts true page counts, preventing customer fraud and calculating bill totals automatically.
-            </p>
-          </div>
-
-          <div className="feature-card">
-            <div className="feature-icon">
-              <TrendingUp size={22} strokeWidth={2.4} />
-            </div>
-            <h3 className="feature-title">Real-Time Control Center</h3>
-            <p className="feature-desc">
-              Live dashboard monitoring queue health, printer hardware status, daily revenue, and one-click reprint/cancel controls.
-            </p>
-          </div>
-
-          <div className="feature-card">
-            <div className="feature-icon">
-              <ShieldCheck size={22} strokeWidth={2.4} />
-            </div>
-            <h3 className="feature-title">Multi-Shop Franchise Ready</h3>
-            <p className="feature-desc">
-              Each store connects via a dedicated secret auth token. Easily scale from 1 counter to 1,000 store locations across college campuses and cities.
+              Manage your shop identity, configure custom rates for A4/A3 B&amp;W and Color, view live queues, and print front-desk standees with 1 click.
             </p>
           </div>
         </div>
       </section>
 
-      {/* How It Works */}
-      <section id="how-it-works" className="landing-section bg-subtle-section">
-        <div className="section-badge">USER JOURNEY</div>
-        <h2 className="section-heading">How Printr Automates the Entire Workflow</h2>
-        <p className="section-subheading">From customer mobile device to physical paper tray in 4 simple steps.</p>
+      {/* Deployment Section */}
+      <section id="deploy" className="landing-section">
+        <div className="section-badge">SELF-HOST IN 3 MINUTES</div>
+        <h2 className="section-heading">How to Deploy To Your Own Website</h2>
 
-        <div className="steps-cards-grid">
-          <div className="flow-card">
-            <div className="flow-num">01</div>
-            <h4 className="flow-title">Customer Scans &amp; Uploads</h4>
-            <p className="flow-desc">
-              Customer scans your shop poster QR code to open the mobile web portal. They select PDF, JPG, or PNG files with instant page analysis.
-            </p>
-          </div>
-
-          <div className="flow-card">
-            <div className="flow-num">02</div>
-            <h4 className="flow-title">Custom Options &amp; Billing</h4>
-            <p className="flow-desc">
-              Customer chooses copies, single/double sided, A4/A3, and color mode. Total bill is calculated dynamically based on store rates.
-            </p>
-          </div>
-
-          <div className="flow-card">
-            <div className="flow-num">03</div>
-            <h4 className="flow-title">UPI Payment</h4>
-            <p className="flow-desc">
-              Customer scans the UPI QR code directly on their phone using GPay, PhonePe, Paytm, or CRED to clear payment in 5 seconds.
-            </p>
-          </div>
-
-          <div className="flow-card">
-            <div className="flow-num">04</div>
-            <h4 className="flow-title">Automatic Physical Print</h4>
-            <p className="flow-desc">
-              Your computer print agent immediately receives the secure job payload, downloads the file, and sends native print commands to the printer.
-            </p>
-          </div>
-        </div>
-      </section>
-
-      {/* Setup Guide for Store Owners */}
-      <section id="setup-guide" className="landing-section">
-        <div className="section-badge">SCALE TO NEW SHOPS</div>
-        <h2 className="section-heading">Deploying Printr to a New Print / Xerox Shop in 3 Minutes</h2>
-        <p className="section-subheading">
-          Setting up a new counter requires zero specialized hardware — any existing PC or Mac connected to your USB/Wi-Fi printer works out of the box.
-        </p>
-
-        <div className="instructions-panel">
-          <div className="instruction-step">
-            <div className="instruction-badge">Step 1</div>
-            <div className="instruction-content">
-              <h4>Open Admin &amp; Configure Shop Identity</h4>
-              <p>Navigate to <code>/admin</code> → <strong>Rates tab</strong>. Set your shop’s UPI ID (e.g. <code>store@upi</code>) and configure your rates per page.</p>
+        <div className="setup-steps-list">
+          <div className="setup-step-row">
+            <div className="step-number-circle">1</div>
+            <div className="step-content">
+              <h3 className="step-title">Deploy Web Hub to Vercel or Netlify</h3>
+              <p className="step-desc">
+                Fork or clone the repository on GitHub, import it into Vercel or Netlify, and attach your custom domain (e.g., <code>print.yourshop.com</code>).
+              </p>
             </div>
           </div>
 
-          <div className="instruction-step">
-            <div className="instruction-badge">Step 2</div>
-            <div className="instruction-content">
-              <h4>Connect the Shop Computer Print Agent</h4>
-              <p>On the counter laptop or PC connected to your printer, start the background agent process:</p>
-              <div className="code-snippet-box">
-                <code>BACKEND_URL="https://printr.ruthwikreddy.live" PRINT_AGENT_AUTH_SECRET="your-auth-token" node print-agent/agent.js</code>
-              </div>
+          <div className="setup-step-row">
+            <div className="step-number-circle">2</div>
+            <div className="step-content">
+              <h3 className="step-title">Set Up Your Shop Details in /admin</h3>
+              <p className="step-desc">
+                Open your deployed website&apos;s <code>/admin</code> panel, enter your Shop Name, UPI ID (e.g. <code>yourname@okhdfcbank</code>), and set your per-page rates.
+              </p>
             </div>
           </div>
 
-          <div className="instruction-step">
-            <div className="instruction-badge">Step 3</div>
-            <div className="instruction-content">
-              <h4>Keep Running 24/7 with PM2 (Mac &amp; Windows)</h4>
-              <p>Ensure the print service launches automatically whenever the store computer boots:</p>
-              <div className="code-snippet-box">
-                <code>pm2 start ecosystem.config.js &amp;&amp; pm2 save &amp;&amp; pm2 startup</code>
-              </div>
-            </div>
-          </div>
-
-          <div className="instruction-step">
-            <div className="instruction-badge">Step 4</div>
-            <div className="instruction-content">
-              <h4>Print Your Counter QR Standee</h4>
-              <p>Display your store URL <code>https://printr.ruthwikreddy.live</code> as a standee at the front desk. Customers scan and print independently.</p>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Author & Engineering Credential Section */}
-      <section id="author" className="landing-section bg-subtle-section">
-        <div className="author-card">
-          <div className="author-details">
-            <div className="section-badge">SYSTEM ARCHITECT</div>
-            <h2 className="author-name">Engineered &amp; Built by Ruthwik Reddy</h2>
-            <p className="author-bio">
-              Printr was designed and engineered by <strong>Ruthwik Reddy</strong> to revolutionize decentralized hardware automation and self-service commerce workflows.
-            </p>
-            <div className="author-links">
-              <a
-                href="https://www.ruthwikreddy.live/"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="btn-landing-primary"
-              >
-                Visit Official Portfolio (ruthwikreddy.live) <ExternalLink size={14} strokeWidth={2.4} />
-              </a>
-              <a
-                href="https://github.com/ruthwwikreddy/printr"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="btn-landing-secondary"
-              >
-                <Terminal size={14} strokeWidth={2.4} /> GitHub Repository
-              </a>
+          <div className="setup-step-row">
+            <div className="step-number-circle">3</div>
+            <div className="step-content">
+              <h3 className="step-title">Start the Agent on Counter Computer</h3>
+              <p className="step-desc">
+                Double-click <code>start-windows.bat</code> on Windows or run <code>start-mac-linux.sh</code> on macOS to connect your physical printer.
+              </p>
             </div>
           </div>
         </div>
@@ -337,32 +234,18 @@ export default function LandingPage() {
 
       {/* Footer */}
       <footer className="landing-footer">
-        <div className="footer-inner">
-          <div className="footer-brand">
-            <div className="brand-icon-box">
-              <Printer size={16} strokeWidth={2.4} />
-            </div>
-            <span>Printr — Cloud Smart Print Automation</span>
-          </div>
-
-          <div className="footer-copy">
-            &copy; {new Date().getFullYear()} Printr. Built with pride by{' '}
-            <a
-              href="https://www.ruthwikreddy.live/"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="author-link"
-            >
-              Ruthwik Reddy
-            </a>
-            .
-          </div>
-
-          <div className="footer-links">
+        <div className="landing-footer-inner">
+          <p>
+            Printr is 100% Free &amp; Open-Source under the MIT License.
+          </p>
+          <div className="landing-footer-links">
             <Link href="/">Customer Kiosk</Link>
-            <Link href="/admin">Store Control Center</Link>
+            <Link href="/admin">Shop Admin</Link>
+            <a href="https://github.com/ruthwwikreddy/printr" target="_blank" rel="noopener noreferrer">
+              GitHub
+            </a>
             <a href="https://www.ruthwikreddy.live/" target="_blank" rel="noopener noreferrer">
-              ruthwikreddy.live
+              Author Portfolio
             </a>
           </div>
         </div>

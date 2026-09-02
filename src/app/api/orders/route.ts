@@ -1,12 +1,11 @@
 import { NextResponse } from 'next/server';
 import db from '@/lib/db';
-import { getTenantBySlug } from '@/lib/tenantService';
+import { getShopSettings, syncOrderToFirestore } from '@/lib/firestoreService';
 
 export async function POST(request: Request) {
   try {
     const body = await request.json();
     const {
-      tenantId,
       filename,
       filePath,
       mimeType,
@@ -24,11 +23,9 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Missing file details' }, { status: 400 });
     }
 
-    const cleanTenantId = (tenantId || 'demo-prints').toLowerCase().trim();
-    const tenant = await getTenantBySlug(cleanTenantId);
-
-    // Dynamic Shop-Specific Rates calculation
-    const rates = tenant?.pricing || {
+    // Dynamic Shop Rates
+    const shopSettings = await getShopSettings();
+    const rates = shopSettings.pricing || {
       A4_MONOCHROME: 2,
       A4_COLOUR: 10,
       A3_MONOCHROME: 5,
@@ -39,13 +36,11 @@ export async function POST(request: Request) {
     const unitPrice = rates[rateKey] ?? 2;
     const totalAmount = unitPrice * Number(pageCount) * (Number(copies) || 1);
 
-    const prefix = cleanTenantId.slice(0, 3).toUpperCase();
-    const orderNumber = `${prefix}-${Math.floor(1000 + Math.random() * 9000)}`;
+    const orderNumber = `PRN-${Math.floor(1000 + Math.random() * 9000)}`;
 
     const order = await db.order.create({
       data: {
         orderNumber,
-        tenantId: cleanTenantId,
         customerPhone: customerPhone || null,
         totalAmount,
         status: 'AWAITING_PAYMENT',
@@ -80,13 +75,11 @@ export async function POST(request: Request) {
       },
     });
 
-    // Sync to Cloud Firestore with strict tenantId scoping
+    // Real-time Cloud Sync
     try {
-      const { syncOrderToFirestore } = await import('@/lib/firestoreService');
       await syncOrderToFirestore({
         id: order.id,
         orderNumber: order.orderNumber,
-        tenantId: cleanTenantId,
         customerPhone: customerPhone || null,
         totalAmount,
         status: 'AWAITING_PAYMENT',
@@ -112,9 +105,9 @@ export async function POST(request: Request) {
       success: true,
       orderId: order.id,
       orderNumber: order.orderNumber,
-      tenantId: cleanTenantId,
       amount: totalAmount,
       gatewayOrderId: payment.gatewayOrderId,
+      shopSettings,
     });
   } catch (error) {
     console.error('Order creation error:', error);

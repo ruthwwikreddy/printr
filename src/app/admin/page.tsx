@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   Printer,
   BarChart3,
@@ -22,6 +22,15 @@ import {
   ExternalLink,
   QrCode,
   Store,
+  Terminal,
+  Copy,
+  AlertTriangle,
+  Loader2,
+  Download,
+  Sparkles,
+  Smartphone,
+  MapPin,
+  Phone,
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -45,6 +54,7 @@ interface PrintJob {
   colourMode: string;
   paperSize: string;
   duplexMode: string;
+  pageRange?: string;
 }
 
 interface Order {
@@ -54,26 +64,11 @@ interface Order {
   totalAmount: number;
   status: string;
   createdAt: string;
+  filename?: string;
   printJobs: PrintJob[];
 }
 
-function getOrderBadge(status: string) {
-  const filled = ['COMPLETED', 'PAID', 'PRINTING'];
-  const pending = ['PENDING', 'QUEUED'];
-  if (filled.includes(status)) return 'badge-clean filled';
-  if (pending.includes(status)) return 'badge-clean dashed';
-  return 'badge-clean subtle';
-}
-
-function getJobBadge(status: string) {
-  const filled = ['COMPLETED', 'PROCESSING'];
-  const pending = ['PENDING'];
-  if (filled.includes(status)) return 'badge-clean filled';
-  if (pending.includes(status)) return 'badge-clean dashed';
-  return 'badge-clean subtle';
-}
-
-type AdminTab = 'overview' | 'orders' | 'pricing';
+type AdminTab = 'overview' | 'orders' | 'pricing' | 'agent' | 'standee';
 type FilterStatus = 'ALL' | 'COMPLETED' | 'PENDING' | 'FAILED';
 
 export default function AdminDashboard() {
@@ -84,609 +79,866 @@ export default function AdminDashboard() {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<FilterStatus>('ALL');
 
+  // Shop Settings State
+  const [shopName, setShopName] = useState('Quick Print Xerox');
   const [upiId, setUpiId] = useState('shopowner@upi');
-  const [shopName, setShopName] = useState('PrintShop');
+  const [phone, setPhone] = useState('+91 98765 43210');
+  const [address, setAddress] = useState('Main Market, Counter 1');
+  const [tagline, setTagline] = useState('Instant Automated Self-Service Printing Station');
   const [pricing, setPricing] = useState({
     A4_MONOCHROME: 2,
     A4_COLOUR: 10,
     A3_MONOCHROME: 5,
     A3_COLOUR: 20,
   });
-  const [settingsLoading, setSettingsLoading] = useState(true);
-  const [pricingSaving, setPricingSaving] = useState(false);
-  const [pricingSaved, setPricingSaved] = useState(false);
-  const [settingsError, setSettingsError] = useState<string | null>(null);
 
+  const [savingSettings, setSavingSettings] = useState(false);
+  const [savedSuccess, setSavedSuccess] = useState(false);
+  const [copiedToken, setCopiedToken] = useState(false);
+  const [copiedCmd, setCopiedCmd] = useState<string | null>(null);
+  const [originUrl, setOriginUrl] = useState('');
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      setOriginUrl(window.location.origin);
+    }
+  }, []);
+
+  // Fetch initial stats & settings
   const fetchData = async () => {
     try {
-      const res = await fetch('/api/admin/stats');
-      const data = await res.json();
-      if (data.stats) {
-        setStats(data.stats);
-        setOrders(data.orders || []);
-      }
-    } catch {}
-    setLoading(false);
-  };
+      const [statsRes, settingsRes] = await Promise.all([
+        fetch('/api/admin/stats'),
+        fetch('/api/admin/settings'),
+      ]);
 
-  const fetchSettings = async () => {
-    setSettingsLoading(true);
-    try {
-      const res = await fetch('/api/admin/settings');
-      const data = await res.json();
-      if (data.settings) {
-        setUpiId(data.settings.upiId || 'shopowner@upi');
-        setShopName(data.settings.shopName || 'PrintShop');
-        if (data.settings.pricing) {
-          setPricing({
-            A4_MONOCHROME: data.settings.pricing.A4_MONOCHROME ?? 2,
-            A4_COLOUR: data.settings.pricing.A4_COLOUR ?? 10,
-            A3_MONOCHROME: data.settings.pricing.A3_MONOCHROME ?? 5,
-            A3_COLOUR: data.settings.pricing.A3_COLOUR ?? 20,
-          });
+      if (statsRes.ok) {
+        const statsData = await statsRes.json();
+        setStats(statsData.stats);
+        if (statsData.orders) setOrders(statsData.orders);
+      }
+
+      if (settingsRes.ok) {
+        const settingsData = await settingsRes.json();
+        if (settingsData.settings) {
+          const s = settingsData.settings;
+          setShopName(s.shopName || 'Quick Print Xerox');
+          setUpiId(s.upiId || 'shopowner@upi');
+          setPhone(s.phone || '');
+          setAddress(s.address || '');
+          setTagline(s.tagline || '');
+          if (s.pricing) setPricing(s.pricing);
         }
       }
-    } catch {
-      setSettingsError('Could not load settings from cloud.');
+    } catch (e) {
+      console.error('Failed to load admin data:', e);
     } finally {
-      setSettingsLoading(false);
+      setLoading(false);
     }
   };
 
   useEffect(() => {
     fetchData();
-    fetchSettings();
-
-    // 1. Instant Real-time Cloud Firestore listener for admin orders
-    let unsubscribeFirestore: (() => void) | null = null;
-    import('@/lib/firestoreService').then(({ subscribeToAllFirestoreOrders }) => {
-      unsubscribeFirestore = subscribeToAllFirestoreOrders((fsOrders) => {
-        if (fsOrders && fsOrders.length > 0) {
-          const mapped: Order[] = fsOrders.map((fso) => ({
-            id: fso.id,
-            orderNumber: fso.orderNumber,
-            customerPhone: fso.customerPhone || undefined,
-            totalAmount: fso.totalAmount,
-            status: fso.status,
-            createdAt: fso.createdAt,
-            printJobs: [
-              {
-                id: fso.id,
-                status: fso.jobStatus || 'PENDING',
-                printerName: fso.printerName || undefined,
-                errorLog: fso.errorLog || undefined,
-                copies: fso.copies || 1,
-                colourMode: fso.colourMode || 'MONOCHROME',
-                paperSize: fso.paperSize || 'A4',
-                duplexMode: fso.duplexMode || 'SIMPLEX',
-              },
-            ],
-          }));
-          setOrders(mapped);
-        }
-      });
-    }).catch(() => {});
-
-    // 2. Periodic polling interval
-    const interval = setInterval(fetchData, 5000);
-    return () => {
-      clearInterval(interval);
-      if (unsubscribeFirestore) unsubscribeFirestore();
-    };
+    const interval = setInterval(fetchData, 4000);
+    return () => clearInterval(interval);
   }, []);
 
-  const handleRetry = async (jobId: string) => {
-    if (!confirm('Retry this print job now?')) return;
-    await fetch('/api/admin/jobs/retry', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ jobId }),
-    });
-    fetchData();
-  };
-
-  const handleCancel = async (jobId: string) => {
-    if (!confirm('Cancel this print job? This cannot be undone.')) return;
-    await fetch('/api/admin/jobs/cancel', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ jobId }),
-    });
-    fetchData();
-  };
-
-  const handleSavePricing = async () => {
-    setPricingSaving(true);
-    setSettingsError(null);
+  // Save Shop Settings Handler
+  const handleSaveSettings = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSavingSettings(true);
     try {
       const res = await fetch('/api/admin/settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ upiId, shopName, pricing }),
+        body: JSON.stringify({
+          shopName,
+          upiId,
+          phone,
+          address,
+          tagline,
+          pricing,
+        }),
       });
-      const data = await res.json();
-      if (!data.success) throw new Error(data.error || 'Save failed');
-      setPricingSaved(true);
-      setTimeout(() => setPricingSaved(false), 2500);
-    } catch (e: any) {
-      setSettingsError(e?.message || 'Failed to save settings.');
+
+      if (res.ok) {
+        setSavedSuccess(true);
+        setTimeout(() => setSavedSuccess(false), 3000);
+      }
+    } catch (err) {
+      alert('Failed to save settings');
     } finally {
-      setPricingSaving(false);
+      setSavingSettings(false);
     }
   };
 
+  // Filtered Orders
   const filteredOrders = useMemo(() => {
-    return orders.filter((ord) => {
+    return orders.filter((order) => {
       const matchesSearch =
-        ord.orderNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (ord.customerPhone && ord.customerPhone.includes(searchQuery));
+        order.orderNumber.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (order.customerPhone && order.customerPhone.includes(searchQuery));
+
       if (!matchesSearch) return false;
 
       if (statusFilter === 'ALL') return true;
-      if (statusFilter === 'COMPLETED') return ord.status === 'COMPLETED';
-      if (statusFilter === 'PENDING') return ['PENDING', 'CREATED', 'QUEUED'].includes(ord.status);
-      if (statusFilter === 'FAILED') return ord.status === 'FAILED';
+      if (statusFilter === 'COMPLETED') return order.status === 'COMPLETED';
+      if (statusFilter === 'PENDING')
+        return ['PENDING', 'AWAITING_PAYMENT', 'PAID', 'PRINTING'].includes(order.status);
+      if (statusFilter === 'FAILED') return order.status === 'FAILED';
+
       return true;
     });
   }, [orders, searchQuery, statusFilter]);
 
-  if (loading) {
-    return (
-      <div className="page-wrapper">
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '60vh', gap: 14 }}>
-          <div className="status-avatar spinning" style={{ width: 44, height: 44 }} />
-          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)' }}>Loading control center</span>
-        </div>
-      </div>
-    );
-  }
+  const copyToClipboard = (text: string, key: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedCmd(key);
+    setTimeout(() => setCopiedCmd(null), 2000);
+  };
+
+  const kioskUrl = originUrl || 'https://your-shop-domain.com';
+  const standeeQrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=350x350&margin=15&data=${encodeURIComponent(
+    kioskUrl
+  )}`;
 
   return (
-    <div className="admin-layout">
-      {/* Header */}
-      <div className="admin-header-row">
+    <div className="admin-container">
+      {/* Top Navigation */}
+      <header className="admin-header">
         <div className="admin-brand">
-          <div className="admin-brand-icon">
-            <Printer size={22} strokeWidth={2.4} />
+          <div className="admin-logo-badge">
+            <Printer size={18} strokeWidth={2.5} />
           </div>
-          <div>
-            <div className="admin-brand-title">PrintShop Control Center</div>
-            <div className="admin-brand-subtitle">Real-time queue monitoring & automated dispatch</div>
-          </div>
-        </div>
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <Link
-            href="/landing"
-            className="btn-mini"
-            style={{ textDecoration: 'none' }}
-          >
-            Product &amp; Setup Guide
-          </Link>
-
-          <Link
-            href="/"
-            className="btn-mini"
-            style={{ textDecoration: 'none' }}
-            target="_blank"
-          >
-            Customer Kiosk <ExternalLink size={12} strokeWidth={2.5} />
-          </Link>
-
-          <a
-            href="https://www.ruthwikreddy.live/"
-            className="btn-mini"
-            style={{ textDecoration: 'none', fontWeight: 600 }}
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            ruthwikreddy.live &nearr;
-          </a>
-
-          <div className="admin-tabs">
-            <button
-              className={`admin-tab-btn ${tab === 'overview' ? 'active' : ''}`}
-              onClick={() => setTab('overview')}
-            >
-              <BarChart3 size={14} strokeWidth={2.4} /> Overview
-            </button>
-            <button
-              className={`admin-tab-btn ${tab === 'orders' ? 'active' : ''}`}
-              onClick={() => setTab('orders')}
-            >
-              <ListOrdered size={14} strokeWidth={2.4} /> Orders
-            </button>
-            <button
-              className={`admin-tab-btn ${tab === 'pricing' ? 'active' : ''}`}
-              onClick={() => setTab('pricing')}
-            >
-              <Banknote size={14} strokeWidth={2.4} /> Rates
-            </button>
+          <div className="admin-title-group">
+            <span className="admin-title">{shopName}</span>
+            <span className="admin-subtitle">Shop Owner Control Center</span>
           </div>
         </div>
-      </div>
 
-      {/* OVERVIEW TAB */}
-      {tab === 'overview' && stats && (
-        <>
+        <div className="admin-header-right">
+          {/* Agent Status Live Indicator */}
+          <div
+            className={`admin-status-badge ${
+              stats?.isOnline ? 'status-online' : 'status-offline'
+            }`}
+          >
+            <span className="dot pulse"></span>
+            <span>
+              {stats?.isOnline
+                ? `Agent Online (${stats.agentName})`
+                : 'Agent Offline (Start Daemon)'}
+            </span>
+          </div>
+
+          <Link href="/" target="_blank" className="btn-customer-portal">
+            <ExternalLink size={14} />
+            <span>Open Customer Kiosk</span>
+          </Link>
+        </div>
+      </header>
+
+      {/* Main Navigation Tabs */}
+      <nav className="admin-nav-tabs">
+        <button
+          type="button"
+          className={`tab-item ${tab === 'overview' ? 'active' : ''}`}
+          onClick={() => setTab('overview')}
+        >
+          <BarChart3 size={15} />
+          <span>Live Overview</span>
+        </button>
+        <button
+          type="button"
+          className={`tab-item ${tab === 'orders' ? 'active' : ''}`}
+          onClick={() => setTab('orders')}
+        >
+          <ListOrdered size={15} />
+          <span>Print Orders Queue ({orders.length})</span>
+        </button>
+        <button
+          type="button"
+          className={`tab-item ${tab === 'pricing' ? 'active' : ''}`}
+          onClick={() => setTab('pricing')}
+        >
+          <Banknote size={15} />
+          <span>Rates &amp; Direct UPI</span>
+        </button>
+        <button
+          type="button"
+          className={`tab-item ${tab === 'agent' ? 'active' : ''}`}
+          onClick={() => setTab('agent')}
+        >
+          <Terminal size={15} />
+          <span>Connect Counter PC</span>
+        </button>
+        <button
+          type="button"
+          className={`tab-item ${tab === 'standee' ? 'active' : ''}`}
+          onClick={() => setTab('standee')}
+        >
+          <QrCode size={15} />
+          <span>Counter QR Standee</span>
+        </button>
+      </nav>
+
+      {/* TAB 1: Live Overview */}
+      {tab === 'overview' && (
+        <div className="admin-tab-content">
+          {/* Metrics Grid */}
           <div className="stats-grid">
-            <div className="stat-box">
-              <div className="stat-box-label">
-                <Server size={12} strokeWidth={2.4} /> Print Agent
+            <div className="stat-card">
+              <div className="stat-header">
+                <span className="stat-label">Orders Today</span>
+                <Clock size={16} className="stat-icon" />
               </div>
-              <div style={{ margin: '6px 0' }}>
-                <span className={`agent-state-badge ${stats.isOnline ? 'online' : 'offline'}`}>
-                  {stats.isOnline ? 'ONLINE' : 'OFFLINE'}
-                </span>
-              </div>
-              <div className="stat-box-sub">{stats.agentName}</div>
+              <div className="stat-val">{stats?.ordersToday ?? 0}</div>
+              <span className="stat-sub">Paid &amp; Received</span>
             </div>
 
-            <div className="stat-box">
-              <div className="stat-box-label">
-                <Banknote size={12} strokeWidth={2.4} /> Revenue (Today)
+            <div className="stat-card">
+              <div className="stat-header">
+                <span className="stat-label">Today's Revenue</span>
+                <Banknote size={16} className="stat-icon text-accent" />
               </div>
-              <div className="stat-box-value">INR {Number(stats.totalRevenue || 0).toFixed(2)}</div>
-              <div className="stat-box-sub">From settled print orders</div>
+              <div className="stat-val text-accent">₹{(stats?.totalRevenue ?? 0).toFixed(2)}</div>
+              <span className="stat-sub">100% Direct to your UPI</span>
             </div>
 
-            <div className="stat-box">
-              <div className="stat-box-label">
-                <Activity size={12} strokeWidth={2.4} /> Total Orders
+            <div className="stat-card">
+              <div className="stat-header">
+                <span className="stat-label">Queued Jobs</span>
+                <Layers size={16} className="stat-icon" />
               </div>
-              <div className="stat-box-value">{stats.ordersToday}</div>
-              <div className="stat-box-sub">Inbound customer uploads</div>
+              <div className="stat-val">{stats?.queuedJobs ?? 0}</div>
+              <span className="stat-sub">Waiting for physical print</span>
             </div>
 
-            <div className="stat-box">
-              <div className="stat-box-label">
-                <Layers size={12} strokeWidth={2.4} /> Queue Distribution
+            <div className="stat-card">
+              <div className="stat-header">
+                <span className="stat-label">Completed Jobs</span>
+                <CheckCircle2 size={16} className="stat-icon text-success" />
               </div>
-              <div className="queue-chips-wrap">
-                <span className="queue-chip">
-                  <Clock size={11} strokeWidth={2.5} /> {stats.queuedJobs} Queued
-                </span>
-                <span className="queue-chip">
-                  <CircleDot size={11} strokeWidth={2.5} /> {stats.printingJobs} Printing
-                </span>
-                <span className="queue-chip">
-                  <Check size={11} strokeWidth={3} /> {stats.completedJobs} Done
-                </span>
-                <span className="queue-chip">
-                  <X size={11} strokeWidth={3} /> {stats.failedJobs} Failed
-                </span>
-              </div>
+              <div className="stat-val text-success">{stats?.completedJobs ?? 0}</div>
+              <span className="stat-sub">Successfully printed</span>
             </div>
           </div>
 
-          <div className="table-panel">
-            <div className="table-panel-header">
-              <div className="table-panel-title">
-                <ListOrdered size={16} strokeWidth={2.4} /> Recent Submissions
+          {/* Quick Hardware & Instructions Strip */}
+          <div className="admin-quick-strip">
+            <div className="quick-strip-left">
+              <div className="strip-badge">
+                <Server size={14} />
+                <span>Hardware Connection Status</span>
               </div>
-              <button className="btn-mini" onClick={fetchData}>
-                <RefreshCw size={11} strokeWidth={2.5} /> Refresh
+              <p className="strip-text">
+                {stats?.isOnline ? (
+                  <>
+                    Active Print Daemon is listening on <strong>{stats.agentName}</strong>. Customer
+                    jobs will be printed immediately upon payment.
+                  </>
+                ) : (
+                  <>
+                    No print agent connected. Launch the print agent daemon on your counter computer
+                    to enable automated physical printing.
+                  </>
+                )}
+              </p>
+            </div>
+            <div className="quick-strip-right">
+              <button className="btn-action-outline" onClick={() => setTab('agent')}>
+                <Terminal size={14} />
+                <span>View Setup Commands</span>
+              </button>
+              <button className="btn-action-outline" onClick={() => setTab('standee')}>
+                <QrCode size={14} />
+                <span>Print QR Standee</span>
               </button>
             </div>
-            <div className="table-scroll">
-              <table className="data-table">
+          </div>
+
+          {/* Recent Orders Preview */}
+          <div className="admin-card">
+            <div className="admin-card-header">
+              <h3 className="card-title">Recent Print Orders</h3>
+              <button className="btn-link-tab" onClick={() => setTab('orders')}>
+                View Full Queue →
+              </button>
+            </div>
+
+            <div className="orders-table-wrapper">
+              <table className="orders-table">
                 <thead>
                   <tr>
-                    <th>Order Number</th>
-                    <th>Customer Phone</th>
-                    <th>Total Amount</th>
-                    <th>Payment Status</th>
-                    <th>Print Status</th>
-                    <th>Received At</th>
-                    <th>Actions</th>
+                    <th>Order Ref</th>
+                    <th>Time</th>
+                    <th>Customer</th>
+                    <th>Options</th>
+                    <th>Amount</th>
+                    <th>Status</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {orders.length === 0 ? (
+                  {orders.slice(0, 8).map((order) => {
+                    const job = order.printJobs?.[0];
+                    return (
+                      <tr key={order.id}>
+                        <td className="font-mono font-bold">{order.orderNumber}</td>
+                        <td className="text-muted">
+                          {new Date(order.createdAt).toLocaleTimeString([], {
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          })}
+                        </td>
+                        <td>{order.customerPhone || 'Counter Guest'}</td>
+                        <td className="text-sm">
+                          {job ? (
+                            <span>
+                              {job.copies}x {job.colourMode === 'COLOUR' ? 'Color' : 'B&W'}{' '}
+                              {job.paperSize} ({job.duplexMode})
+                            </span>
+                          ) : (
+                            'Standard Print'
+                          )}
+                        </td>
+                        <td className="font-bold">₹{order.totalAmount.toFixed(2)}</td>
+                        <td>
+                          <span
+                            className={`badge-pill ${
+                              order.status === 'COMPLETED'
+                                ? 'badge-success'
+                                : order.status === 'PAID'
+                                ? 'badge-info'
+                                : order.status === 'FAILED'
+                                ? 'badge-danger'
+                                : 'badge-warning'
+                            }`}
+                          >
+                            {order.status}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {orders.length === 0 && (
                     <tr>
-                      <td colSpan={7} className="table-empty">
-                        No orders recorded yet. Share the portal to begin receiving jobs.
+                      <td colSpan={6} className="text-center py-6 text-muted">
+                        No orders recorded yet today.
                       </td>
                     </tr>
-                  ) : (
-                    orders.slice(0, 10).map((ord) => {
-                      const job = ord.printJobs?.[0];
-                      return (
-                        <tr key={ord.id}>
-                          <td className="td-mono">{ord.orderNumber}</td>
-                          <td>{ord.customerPhone || <span style={{ color: 'var(--text-muted)' }}>&mdash;</span>}</td>
-                          <td className="td-mono">INR {Number(ord.totalAmount).toFixed(2)}</td>
-                          <td><span className={getOrderBadge(ord.status)}>{ord.status}</span></td>
-                          <td>
-                            {job ? (
-                              <span className={getJobBadge(job.status)}>{job.status}</span>
-                            ) : (
-                              <span className="badge-clean subtle">&mdash;</span>
-                            )}
-                          </td>
-                          <td>
-                            {new Date(ord.createdAt).toLocaleTimeString('en-IN', {
-                              hour: '2-digit',
-                              minute: '2-digit',
-                            })}
-                          </td>
-                          <td>
-                            {job && job.status === 'FAILED' && (
-                              <button className="btn-mini dark" onClick={() => handleRetry(job.id)}>
-                                <RotateCw size={11} strokeWidth={2.5} /> Retry
-                              </button>
-                            )}
-                            {job && job.status === 'PENDING' && (
-                              <button className="btn-mini" onClick={() => handleCancel(job.id)}>
-                                <X size={11} strokeWidth={2.8} /> Cancel
-                              </button>
-                            )}
-                            {job && job.status === 'COMPLETED' && (
-                              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11.5, fontWeight: 700 }}>
-                                <CheckCircle2 size={13} strokeWidth={2.5} /> Printed
-                              </span>
-                            )}
-                          </td>
-                        </tr>
-                      );
-                    })
                   )}
                 </tbody>
               </table>
             </div>
           </div>
-        </>
+        </div>
       )}
 
-      {/* ALL ORDERS TAB */}
+      {/* TAB 2: Full Orders Queue */}
       {tab === 'orders' && (
-        <div className="table-panel">
-          <div className="table-panel-header">
-            <div className="table-panel-title">
-              <ListOrdered size={16} strokeWidth={2.4} /> Master Order Registry
-            </div>
-            <button className="btn-mini" onClick={fetchData}>
-              <RefreshCw size={11} strokeWidth={2.5} /> Refresh
-            </button>
-          </div>
+        <div className="admin-tab-content">
+          <div className="admin-card">
+            <div className="orders-toolbar">
+              <div className="search-box">
+                <Search size={15} />
+                <input
+                  type="text"
+                  placeholder="Search by order # or phone..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+              </div>
 
-          <div className="table-filter-bar">
-            <div className="table-search-input-wrap">
-              <Search size={14} className="table-search-icon" strokeWidth={2.4} />
-              <input
-                className="table-search-input"
-                placeholder="Search by order number or phone..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
+              <div className="filter-pills">
+                {(['ALL', 'PENDING', 'COMPLETED', 'FAILED'] as FilterStatus[]).map((f) => (
+                  <button
+                    key={f}
+                    type="button"
+                    className={`filter-btn ${statusFilter === f ? 'active' : ''}`}
+                    onClick={() => setStatusFilter(f)}
+                  >
+                    {f}
+                  </button>
+                ))}
+              </div>
             </div>
 
-            <div className="table-filter-pills">
-              {(['ALL', 'COMPLETED', 'PENDING', 'FAILED'] as FilterStatus[]).map((st) => (
-                <button
-                  key={st}
-                  className={`filter-pill-btn ${statusFilter === st ? 'active' : ''}`}
-                  onClick={() => setStatusFilter(st)}
-                >
-                  {st}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="table-scroll">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>Order #</th>
-                  <th>Customer Phone</th>
-                  <th>Total Amount</th>
-                  <th>Specifications</th>
-                  <th>Payment Status</th>
-                  <th>Print Status</th>
-                  <th>Target Printer</th>
-                  <th>Dispatch Log</th>
-                  <th>Date &amp; Time</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredOrders.length === 0 ? (
+            <div className="orders-table-wrapper">
+              <table className="orders-table">
+                <thead>
                   <tr>
-                    <td colSpan={10} className="table-empty">
-                      {searchQuery || statusFilter !== 'ALL'
-                        ? 'No orders match your filter criteria.'
-                        : 'No orders recorded in system.'}
-                    </td>
+                    <th>Order Ref</th>
+                    <th>Created At</th>
+                    <th>Customer</th>
+                    <th>Print Settings</th>
+                    <th>Amount</th>
+                    <th>Payment</th>
+                    <th>Printer / Job</th>
                   </tr>
-                ) : (
-                  filteredOrders.map((ord) => {
-                    const job = ord.printJobs?.[0];
+                </thead>
+                <tbody>
+                  {filteredOrders.map((order) => {
+                    const job = order.printJobs?.[0];
                     return (
-                      <tr key={ord.id}>
-                        <td className="td-mono">{ord.orderNumber}</td>
-                        <td>{ord.customerPhone || <span style={{ color: 'var(--text-muted)' }}>&mdash;</span>}</td>
-                        <td className="td-mono">INR {Number(ord.totalAmount).toFixed(2)}</td>
-                        <td style={{ fontSize: 11.5, color: 'var(--text-secondary)' }}>
-                          {job
-                            ? `${job.copies}x · ${job.colourMode === 'MONOCHROME' ? 'B&W' : 'Color'} · ${job.paperSize} · ${job.duplexMode === 'SIMPLEX' ? '1-Sided' : '2-Sided'}`
-                            : '—'}
-                        </td>
-                        <td><span className={getOrderBadge(ord.status)}>{ord.status}</span></td>
-                        <td>{job ? <span className={getJobBadge(job.status)}>{job.status}</span> : '—'}</td>
-                        <td style={{ fontSize: 11.5 }}>{job?.printerName || <span style={{ color: 'var(--text-muted)' }}>&mdash;</span>}</td>
-                        <td style={{ fontSize: 11, color: 'var(--text-tertiary)', maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                          {job?.errorLog || <span style={{ color: 'var(--text-muted)' }}>&mdash;</span>}
-                        </td>
-                        <td>
-                          {new Date(ord.createdAt).toLocaleString('en-IN', {
-                            day: '2-digit',
-                            month: 'short',
-                            hour: '2-digit',
-                            minute: '2-digit',
+                      <tr key={order.id}>
+                        <td className="font-mono font-bold">{order.orderNumber}</td>
+                        <td className="text-muted">
+                          {new Date(order.createdAt).toLocaleString([], {
+                            dateStyle: 'short',
+                            timeStyle: 'short',
                           })}
                         </td>
+                        <td>{order.customerPhone || 'Counter Guest'}</td>
                         <td>
-                          {job && job.status === 'FAILED' && (
-                            <button className="btn-mini dark" onClick={() => handleRetry(job.id)}>
-                              <RotateCw size={11} strokeWidth={2.5} /> Retry
-                            </button>
+                          {job ? (
+                            <div className="job-specs-col">
+                              <span>
+                                {job.copies}x {job.colourMode} {job.paperSize}
+                              </span>
+                              <span className="text-xs text-muted">
+                                {job.duplexMode}{' '}
+                                {job.pageRange ? `· Pgs: ${job.pageRange}` : ''}
+                              </span>
+                            </div>
+                          ) : (
+                            'Standard'
                           )}
-                          {job && job.status === 'PENDING' && (
-                            <button className="btn-mini" onClick={() => handleCancel(job.id)}>
-                              <X size={11} strokeWidth={2.8} /> Cancel
-                            </button>
-                          )}
+                        </td>
+                        <td className="font-bold text-accent">₹{order.totalAmount.toFixed(2)}</td>
+                        <td>
+                          <span
+                            className={`badge-pill ${
+                              ['PAID', 'COMPLETED'].includes(order.status)
+                                ? 'badge-success'
+                                : 'badge-warning'
+                            }`}
+                          >
+                            {order.status}
+                          </span>
+                        </td>
+                        <td>
+                          <div className="job-status-col">
+                            <span
+                              className={`job-status-badge ${
+                                job?.status === 'COMPLETED'
+                                  ? 'text-success'
+                                  : job?.status === 'PROCESSING'
+                                  ? 'text-info'
+                                  : job?.status === 'FAILED'
+                                  ? 'text-danger'
+                                  : 'text-muted'
+                              }`}
+                            >
+                              {job?.status || 'QUEUED'}
+                            </span>
+                            {job?.printerName && (
+                              <span className="text-xs text-muted">via {job.printerName}</span>
+                            )}
+                            {job?.errorLog && (
+                              <span className="text-xs text-danger">{job.errorLog}</span>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     );
-                  })
-                )}
-              </tbody>
-            </table>
+                  })}
+                  {filteredOrders.length === 0 && (
+                    <tr>
+                      <td colSpan={7} className="text-center py-8 text-muted">
+                        No orders matching the current filter.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
       )}
 
-      {/* PRICING TAB */}
+      {/* TAB 3: Rates & Direct UPI */}
       {tab === 'pricing' && (
-        <div className="pricing-section-container">
-
-          {/* UPI & Shop Settings */}
-          <div className="table-panel" style={{ marginBottom: 20 }}>
-            <div className="table-panel-header">
-              <div className="table-panel-title">
-                <QrCode size={16} strokeWidth={2.4} /> Payment Settings
-              </div>
-              {settingsLoading && (
-                <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>Loading from cloud...</span>
-              )}
-            </div>
-            <div style={{ padding: '24px 28px' }}>
-              <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6, marginBottom: 20 }}>
-                Your UPI ID is embedded in the payment QR code shown to customers. Changes take effect immediately on the next order.
-              </p>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+        <div className="admin-tab-content">
+          <form onSubmit={handleSaveSettings} className="settings-form-layout">
+            {/* Shop Identity */}
+            <div className="admin-card">
+              <div className="admin-card-header">
                 <div>
-                  <label className="form-label" style={{ display: 'block', marginBottom: 6, fontSize: 12, fontWeight: 600 }}>
-                    <QrCode size={12} strokeWidth={2.5} style={{ display: 'inline', marginRight: 5 }} />
-                    UPI ID
-                  </label>
-                  <input
-                    className="form-input pricing-field"
-                    style={{ width: '100%', fontFamily: 'var(--font-mono)', fontSize: 13 }}
-                    placeholder="yourname@upi"
-                    value={upiId}
-                    onChange={(e) => setUpiId(e.target.value)}
-                    disabled={settingsLoading}
-                  />
-                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
-                    e.g. ruthwik@okaxis, shop@ybl, 9876543210@paytm
-                  </div>
+                  <h3 className="card-title">Shop Identity &amp; Contact</h3>
+                  <p className="card-desc">
+                    These details appear on your customer kiosk and printed receipts.
+                  </p>
                 </div>
-                <div>
-                  <label className="form-label" style={{ display: 'block', marginBottom: 6, fontSize: 12, fontWeight: 600 }}>
-                    <Store size={12} strokeWidth={2.5} style={{ display: 'inline', marginRight: 5 }} />
-                    Shop Name (shown in QR)
-                  </label>
+              </div>
+
+              <div className="form-grid">
+                <div className="form-group">
+                  <label>Shop / Business Name</label>
                   <input
-                    className="form-input pricing-field"
-                    style={{ width: '100%', fontSize: 13 }}
-                    placeholder="PrintShop"
+                    type="text"
+                    className="input-clean"
                     value={shopName}
                     onChange={(e) => setShopName(e.target.value)}
-                    disabled={settingsLoading}
+                    required
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>Tagline / Subtitle</label>
+                  <input
+                    type="text"
+                    className="input-clean"
+                    value={tagline}
+                    onChange={(e) => setTagline(e.target.value)}
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>Phone Number (Counter Contact)</label>
+                  <input
+                    type="text"
+                    className="input-clean"
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>Shop Address / Counter Location</label>
+                  <input
+                    type="text"
+                    className="input-clean"
+                    value={address}
+                    onChange={(e) => setAddress(e.target.value)}
                   />
                 </div>
               </div>
+            </div>
 
-              {/* Live QR Preview */}
-              {upiId && (
-                <div style={{ marginTop: 20, display: 'flex', alignItems: 'flex-start', gap: 20 }}>
-                  <div>
-                    <div style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 8 }}>LIVE QR PREVIEW</div>
-                    <div style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 10, display: 'inline-block', background: '#fff' }}>
-                      <img
-                        src={`https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent(`upi://pay?pa=${upiId}&pn=${encodeURIComponent(shopName)}&cu=INR`)}`}
-                        alt="UPI QR Preview"
-                        style={{ display: 'block', width: 120, height: 120 }}
-                      />
-                    </div>
-                  </div>
-                  <div style={{ paddingTop: 28 }}>
-                    <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.7 }}>
-                      <strong style={{ fontFamily: 'var(--font-mono)', fontSize: 13 }}>{upiId}</strong><br />
-                      <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>Customers will scan this to pay</span>
-                    </div>
+            {/* Direct UPI Payment Details */}
+            <div className="admin-card">
+              <div className="admin-card-header">
+                <div>
+                  <h3 className="card-title">Direct UPI Payment Setup</h3>
+                  <p className="card-desc">
+                    100% of customer funds are sent directly to your UPI ID without any intermediary
+                    or fees.
+                  </p>
+                </div>
+              </div>
+
+              <div className="form-grid">
+                <div className="form-group col-span-2">
+                  <label>
+                    Your UPI ID (VPA) <span className="text-danger">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    className="input-clean font-mono"
+                    placeholder="e.g. yourname@okhdfcbank or 9876543210@paytm"
+                    value={upiId}
+                    onChange={(e) => setUpiId(e.target.value)}
+                    required
+                  />
+                  <span className="text-xs text-muted mt-1">
+                    Accepts payments from Google Pay, PhonePe, Paytm, BHIM, Cred, Amazon Pay, and all
+                    banking apps.
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Per-Page Printing Rates */}
+            <div className="admin-card">
+              <div className="admin-card-header">
+                <div>
+                  <h3 className="card-title">Per-Page Printing Rates (₹ INR)</h3>
+                  <p className="card-desc">
+                    Set your custom rates per page. Customer totals are calculated dynamically in
+                    real time.
+                  </p>
+                </div>
+              </div>
+
+              <div className="rates-editor-grid">
+                <div className="rate-edit-box">
+                  <span className="rate-box-title">A4 Black &amp; White</span>
+                  <div className="rate-input-wrap">
+                    <span className="currency-symbol">₹</span>
+                    <input
+                      type="number"
+                      step="0.5"
+                      min="0.5"
+                      value={pricing.A4_MONOCHROME}
+                      onChange={(e) =>
+                        setPricing({ ...pricing, A4_MONOCHROME: parseFloat(e.target.value) || 0 })
+                      }
+                      className="input-rate"
+                    />
+                    <span className="rate-unit">/ page</span>
                   </div>
                 </div>
-              )}
+
+                <div className="rate-edit-box">
+                  <span className="rate-box-title">A4 Full Color</span>
+                  <div className="rate-input-wrap">
+                    <span className="currency-symbol">₹</span>
+                    <input
+                      type="number"
+                      step="0.5"
+                      min="1"
+                      value={pricing.A4_COLOUR}
+                      onChange={(e) =>
+                        setPricing({ ...pricing, A4_COLOUR: parseFloat(e.target.value) || 0 })
+                      }
+                      className="input-rate"
+                    />
+                    <span className="rate-unit">/ page</span>
+                  </div>
+                </div>
+
+                <div className="rate-edit-box">
+                  <span className="rate-box-title">A3 Black &amp; White</span>
+                  <div className="rate-input-wrap">
+                    <span className="currency-symbol">₹</span>
+                    <input
+                      type="number"
+                      step="0.5"
+                      min="1"
+                      value={pricing.A3_MONOCHROME}
+                      onChange={(e) =>
+                        setPricing({ ...pricing, A3_MONOCHROME: parseFloat(e.target.value) || 0 })
+                      }
+                      className="input-rate"
+                    />
+                    <span className="rate-unit">/ page</span>
+                  </div>
+                </div>
+
+                <div className="rate-edit-box">
+                  <span className="rate-box-title">A3 Full Color</span>
+                  <div className="rate-input-wrap">
+                    <span className="currency-symbol">₹</span>
+                    <input
+                      type="number"
+                      step="1"
+                      min="1"
+                      value={pricing.A3_COLOUR}
+                      onChange={(e) =>
+                        setPricing({ ...pricing, A3_COLOUR: parseFloat(e.target.value) || 0 })
+                      }
+                      className="input-rate"
+                    />
+                    <span className="rate-unit">/ page</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Save Action Bar */}
+            <div className="settings-action-bar">
+              <button type="submit" className="btn-save-settings" disabled={savingSettings}>
+                {savingSettings ? (
+                  <>
+                    <Loader2 size={16} className="animate-spin" />
+                    <span>Saving Settings...</span>
+                  </>
+                ) : savedSuccess ? (
+                  <>
+                    <Check size={16} />
+                    <span>Saved Successfully!</span>
+                  </>
+                ) : (
+                  <>
+                    <Save size={16} />
+                    <span>Save All Changes</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* TAB 4: Connect Counter PC (Agent Setup) */}
+      {tab === 'agent' && (
+        <div className="admin-tab-content">
+          <div className="admin-card">
+            <div className="admin-card-header">
+              <div>
+                <h3 className="card-title">Connect Counter Printer Computer</h3>
+                <p className="card-desc">
+                  Run the lightweight agent daemon on the computer connected to your physical
+                  printer.
+                </p>
+              </div>
+            </div>
+
+            <div className="agent-instructions-grid">
+              {/* Windows Instructions */}
+              <div className="agent-platform-card">
+                <div className="platform-header">
+                  <Server size={18} />
+                  <h4>Windows (10 / 11 / Server)</h4>
+                </div>
+                <p className="platform-desc">
+                  Double-click the 1-click batch launcher or run in PowerShell:
+                </p>
+                <div className="cmd-box">
+                  <code>
+                    set BACKEND_URL={kioskUrl} &amp;&amp; node print-agent\agent.js
+                  </code>
+                  <button
+                    className="btn-copy-code"
+                    onClick={() =>
+                      copyToClipboard(
+                        `set BACKEND_URL=${kioskUrl} && node print-agent\\agent.js`,
+                        'win'
+                      )
+                    }
+                  >
+                    {copiedCmd === 'win' ? <Check size={13} /> : <Copy size={13} />}
+                  </button>
+                </div>
+                <div className="platform-tip">
+                  💡 You can also double click <code>print-agent/start-windows.bat</code>.
+                </div>
+              </div>
+
+              {/* macOS / Linux Instructions */}
+              <div className="agent-platform-card">
+                <div className="platform-header">
+                  <Terminal size={18} />
+                  <h4>macOS / Linux / Raspberry Pi</h4>
+                </div>
+                <p className="platform-desc">Run directly via Terminal:</p>
+                <div className="cmd-box">
+                  <code>
+                    BACKEND_URL="{kioskUrl}" node print-agent/agent.js
+                  </code>
+                  <button
+                    className="btn-copy-code"
+                    onClick={() =>
+                      copyToClipboard(
+                        `BACKEND_URL="${kioskUrl}" node print-agent/agent.js`,
+                        'mac'
+                      )
+                    }
+                  >
+                    {copiedCmd === 'mac' ? <Check size={13} /> : <Copy size={13} />}
+                  </button>
+                </div>
+                <div className="platform-tip">
+                  💡 Or execute <code>bash print-agent/start-mac-linux.sh</code>.
+                </div>
+              </div>
+
+              {/* PM2 24/7 Autostart */}
+              <div className="agent-platform-card col-span-2">
+                <div className="platform-header">
+                  <Sparkles size={18} />
+                  <h4>Keep Running 24/7 on Reboot (PM2 Daemon)</h4>
+                </div>
+                <p className="platform-desc">
+                  To keep the agent automatically running even if the counter computer restarts:
+                </p>
+                <div className="cmd-box">
+                  <code>
+                    npm install -g pm2 &amp;&amp; pm2 start ecosystem.config.js &amp;&amp; pm2 save &amp;&amp; pm2 startup
+                  </code>
+                  <button
+                    className="btn-copy-code"
+                    onClick={() =>
+                      copyToClipboard(
+                        'npm install -g pm2 && pm2 start ecosystem.config.js && pm2 save && pm2 startup',
+                        'pm2'
+                      )
+                    }
+                  >
+                    {copiedCmd === 'pm2' ? <Check size={13} /> : <Copy size={13} />}
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
+        </div>
+      )}
 
-          {/* Pricing */}
-          <div className="table-panel">
-            <div className="table-panel-header">
-              <div className="table-panel-title">
-                <Banknote size={16} strokeWidth={2.4} /> Rate Card Configuration
+      {/* TAB 5: Counter QR Standee */}
+      {tab === 'standee' && (
+        <div className="admin-tab-content">
+          <div className="standee-wrapper">
+            <div className="standee-actions-bar">
+              <div>
+                <h3 className="card-title">Front-Desk QR Standee</h3>
+                <p className="card-desc">
+                  Print and place this standee at your counter. Customers can scan to upload and pay
+                  instantly.
+                </p>
               </div>
+              <button
+                className="btn-print-standee"
+                onClick={() => {
+                  window.print();
+                }}
+              >
+                <Printer size={16} />
+                <span>Print Standee on A4</span>
+              </button>
             </div>
-            <div style={{ padding: '24px 28px' }}>
-              <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6, marginBottom: 20 }}>
-                Configure per-page unit rates for all supported paper formats and color modes. Updated pricing applies live across the customer portal.
-              </p>
 
-              <div className="pricing-grid-clean">
-                {[
-                  { key: 'A4_MONOCHROME', label: 'A4 · Black & White' },
-                  { key: 'A4_COLOUR', label: 'A4 · Full Color' },
-                  { key: 'A3_MONOCHROME', label: 'A3 · Black & White' },
-                  { key: 'A3_COLOUR', label: 'A3 · Full Color' },
-                ].map(({ key, label }) => (
-                  <div className="pricing-card-clean" key={key}>
-                    <div className="pricing-header-label">
-                      <SlidersHorizontal size={13} strokeWidth={2.4} /> {label}
-                    </div>
-                    <div className="pricing-input-group">
-                      <span className="pricing-prefix">INR</span>
-                      <input
-                        className="pricing-field"
-                        type="number"
-                        min="0"
-                        step="0.5"
-                        value={pricing[key as keyof typeof pricing]}
-                        onChange={(e) =>
-                          setPricing((p) => ({ ...p, [key]: parseFloat(e.target.value) || 0 }))
-                        }
-                        disabled={settingsLoading}
-                      />
-                      <span className="pricing-unit">/ page</span>
-                    </div>
+            {/* Printable Standee Sheet */}
+            <div className="standee-sheet-preview" id="printable-standee">
+              <div className="standee-inner-frame">
+                <div className="standee-header">
+                  <div className="standee-logo-icon">
+                    <Printer size={32} strokeWidth={2.5} />
                   </div>
-                ))}
-              </div>
-
-              {settingsError && (
-                <div style={{ marginTop: 16, fontSize: 12.5, color: '#c0392b', fontWeight: 500 }}>
-                  {settingsError}
+                  <h1 className="standee-shop-name">{shopName}</h1>
+                  <p className="standee-tagline">
+                    {tagline || 'Self-Service Autonomous Printing Kiosk'}
+                  </p>
                 </div>
-              )}
 
-              <div style={{ marginTop: 28 }}>
-                <button
-                  className="btn"
-                  onClick={handleSavePricing}
-                  disabled={pricingSaving || settingsLoading}
-                  style={{ maxWidth: 280 }}
-                >
-                  {pricingSaved ? (
-                    <><Check size={16} strokeWidth={3} /> Settings Saved</>
-                  ) : pricingSaving ? (
-                    <><RefreshCw size={16} className="spin" strokeWidth={2.5} /> Saving to Cloud</>
-                  ) : (
-                    <><Save size={16} strokeWidth={2.5} /> Save UPI ID & Rates</>
+                <div className="standee-qr-frame">
+                  <img
+                    src={standeeQrUrl}
+                    alt="Counter Scan QR"
+                    className="standee-qr-img"
+                    width={280}
+                    height={280}
+                  />
+                  <div className="standee-scan-prompt">
+                    <Smartphone size={18} />
+                    <span>SCAN WITH PHONE CAMERA OR ANY QR APP</span>
+                  </div>
+                </div>
+
+                <div className="standee-steps-strip">
+                  <div className="step-col">
+                    <span className="step-badge">1</span>
+                    <span className="step-text">Upload PDF / Photos</span>
+                  </div>
+                  <div className="step-col">
+                    <span className="step-badge">2</span>
+                    <span className="step-text">Select Color &amp; Copies</span>
+                  </div>
+                  <div className="step-col">
+                    <span className="step-badge">3</span>
+                    <span className="step-text">Pay via UPI &amp; Collect</span>
+                  </div>
+                </div>
+
+                <div className="standee-footer-info">
+                  <span className="kiosk-url-text">{kioskUrl}</span>
+                  {(phone || address) && (
+                    <div className="counter-contact">
+                      {address && <span>{address}</span>}
+                      {address && phone && <span>·</span>}
+                      {phone && <span>Help: {phone}</span>}
+                    </div>
                   )}
-                </button>
+                </div>
               </div>
             </div>
           </div>

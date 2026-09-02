@@ -4,21 +4,19 @@ import type { Metadata, Viewport } from 'next';
 export const metadata: Metadata = {
   metadataBase: new URL('https://printr.ruthwikreddy.live'),
   title: {
-    default: 'Printr — Cloud Smart Printing & Autonomous Print Automation for Xerox & Print Shops',
-    template: '%s | Printr — Built by Ruthwik Reddy',
+    default: 'Printr — Open-Source Autonomous Smart Printing OS for Xerox & Print Shops',
+    template: '%s | Printr',
   },
   description:
-    'Self-service automated document printing system for Xerox shops, campuses, and businesses. Upload PDF/images, custom print configuration, direct UPI QR payments, and instant physical printing. Engineered by Ruthwik Reddy (https://www.ruthwikreddy.live).',
+    '100% Open-source, self-hosted autonomous document printing system for Xerox and print shops. Upload PDF/images, custom print configuration, direct UPI QR payments, and instant physical printing on Windows, macOS, and Linux.',
   keywords: [
     'Printr',
+    'Open Source Print OS',
     'Cloud Printing',
     'Autonomous Print Shop',
     'Xerox automation software',
     'Self service print kiosk',
     'UPI QR Print automation',
-    'Ruthwik Reddy',
-    'ruthwikreddy.live',
-    'Smart Printer SaaS',
     'Wireless automated printing',
     'Next.js printer agent',
   ],
@@ -29,37 +27,19 @@ export const metadata: Metadata = {
     },
   ],
   creator: 'Ruthwik Reddy (https://www.ruthwikreddy.live)',
-  publisher: 'Ruthwik Reddy',
-  applicationName: 'Printr Cloud Automation',
+  applicationName: 'Printr Autonomous OS',
   robots: {
     index: true,
     follow: true,
-    googleBot: {
-      index: true,
-      follow: true,
-      'max-video-preview': -1,
-      'max-image-preview': 'large',
-      'max-snippet': -1,
-    },
   },
   openGraph: {
     type: 'website',
     locale: 'en_US',
     url: 'https://printr.ruthwikreddy.live',
-    title: 'Printr — The Automated Cloud Print System for Print & Xerox Shops',
+    title: 'Printr — Open-Source Autonomous Printing OS',
     description:
-      'Transform any traditional Xerox shop into a 24/7 automated self-service print hub with UPI QR payment and instant physical dispatch. Developed by Ruthwik Reddy.',
-    siteName: 'Printr by Ruthwik Reddy',
-  },
-  twitter: {
-    card: 'summary_large_image',
-    title: 'Printr — Automated Print Shop Ecosystem',
-    description:
-      'Zero queues, automated page calculation, dynamic UPI QR payments, and instant physical printer dispatch. Built by Ruthwik Reddy (https://www.ruthwikreddy.live).',
-    creator: '@ruthwikreddy',
-  },
-  alternates: {
-    canonical: 'https://printr.ruthwikreddy.live',
+      'Turn any conventional Xerox or print shop into an automated 24/7 self-service station. 100% open source.',
+    siteName: 'Printr Open Source',
   },
 };
 
@@ -70,23 +50,15 @@ export const viewport: Viewport = {
   maximumScale: 1,
 };
 
-import { AuthProvider } from '@/lib/AuthContext';
-
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   const jsonLd = {
     '@context': 'https://schema.org',
     '@type': 'SoftwareApplication',
     name: 'Printr',
     applicationCategory: 'BusinessApplication',
-    operatingSystem: 'Cross-platform (macOS, Windows, Linux, Web)',
+    operatingSystem: 'Cross-platform (Windows, macOS, Linux, Web)',
     description:
-      'Autonomous cloud print dispatcher and customer self-service kiosk system for Xerox and print shops. Built by Ruthwik Reddy.',
-    url: 'https://printr.ruthwikreddy.live',
-    author: {
-      '@type': 'Person',
-      name: 'Ruthwik Reddy',
-      url: 'https://www.ruthwikreddy.live',
-    },
+      'Autonomous open-source printing OS and customer self-service kiosk system for Xerox and print shops.',
     offers: {
       '@type': 'Offer',
       price: '0.00',
@@ -100,7 +72,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link
-          href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap"
+          href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap"
           rel="stylesheet"
         />
         <script
@@ -108,9 +80,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
         />
       </head>
-      <body>
-        <AuthProvider>{children}</AuthProvider>
-      </body>
+      <body>{children}</body>
     </html>
   );
 }
